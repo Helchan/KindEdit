@@ -6,7 +6,7 @@
 
 KindEdit 是一款基于 Tauri 2、React 18、TypeScript 和 Rust 的跨平台桌面编辑器应用，当前主要面向 Windows 和 macOS。应用提供多标签文本编辑、结构化文档树视图、Markdown 所见即所得编辑、格式化与压缩、主题与字体配置、会话恢复等能力。
 
-当前版本号为 `0.0.6`，版本声明至少存在于以下位置：
+当前版本号为 `0.0.7`，版本声明至少存在于以下位置：
 
 - `package.json`
 - `package-lock.json`
@@ -99,8 +99,8 @@ Rust 后端职责：
 
 应用图标：
 
-- KindEdit 使用深色圆角矩形底座、后层蓝色文档页、前层白色文档页和绿色插入光标组成的简约图标，表达文本编辑、代码编辑和文档处理能力。
-- 图标不显示外层直角底图；深色圆角矩形底座之外的区域必须保持透明，避免在桌面、Dock、启动器或安装包视图中出现黑色方块背景。
+- KindEdit 使用中性 macOS 风格石墨色圆角矩形底座、后层蓝色文档页、前层白色文档页和绿色插入光标组成的简约图标，表达文本编辑、代码编辑和文档处理能力。
+- 图标不显示外层直角底图；石墨色圆角矩形底座之外的区域必须保持透明，避免在桌面、Dock、启动器或安装包视图中出现黑色方块背景。
 - 桌面打包图标由 `src-tauri/icons/icon.png` 派生，macOS 使用 `src-tauri/icons/icon.icns`，Windows 使用 `src-tauri/icons/icon.ico`，并保留 `32x32.png`、`64x64.png`、`128x128.png`、`128x128@2x.png` 等 PNG 尺寸资源。
 - Tauri 打包配置在 `src-tauri/tauri.conf.json` 的 `bundle.icon` 中显式引用桌面图标资源，确保 macOS 和 Windows 安装产物使用一致的应用图标。
 
