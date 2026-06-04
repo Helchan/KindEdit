@@ -1,0 +1,12 @@
+{
+  "identifier": "default",
+  "description": "Default capabilities for KindEdit",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:event:default",
+    "core:window:allow-destroy",
+    "core:window:allow-close",
+    "dialog:default"
+  ]
+}

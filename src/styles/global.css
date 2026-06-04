@@ -1,0 +1,534 @@
+@import './variables.css';
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.startup-placeholder {
+  flex: 1;
+  background: var(--bg-primary);
+}
+
+/* Toolbar */
+.toolbar {
+  display: flex;
+  align-items: center;
+  height: var(--toolbar-height);
+  padding: 0 8px;
+  background: var(--toolbar-bg);
+  border-bottom: 1px solid var(--border);
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.toolbar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  position: relative;
+  z-index: 1;
+  transition: background 0.15s, color 0.15s;
+}
+
+.toolbar-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.toolbar-btn:active {
+  background: var(--border);
+}
+
+.toolbar-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.toolbar-separator {
+  width: 1px;
+  height: 18px;
+  background: var(--border);
+  margin: 0 4px;
+}
+
+/* Tab Bar */
+.tab-bar {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: var(--tab-height);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.tab-bar-scroll {
+  display: flex;
+  align-items: center;
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  scrollbar-width: none;
+}
+
+.tab-bar-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.tab-bar-new {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin: 0 4px;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.tab-bar-new:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-color: var(--border);
+}
+
+.tab-bar-new svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+/* Tab */
+.tab {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding: 0 8px 0 12px;
+  cursor: pointer;
+  border-right: 1px solid var(--border);
+  background: var(--tab-inactive-bg);
+  white-space: nowrap;
+  user-select: none;
+  font-size: 12px;
+  color: var(--text-secondary);
+  position: relative;
+  transition: background 0.15s;
+  max-width: 180px;
+}
+
+.tab:hover {
+  background: var(--tab-hover-bg);
+}
+
+.tab.active {
+  background: var(--tab-active-bg);
+  color: var(--text-primary);
+  border-bottom: 2px solid var(--accent);
+}
+
+.tab-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 120px;
+}
+
+.tab-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-left: 6px;
+  border: none;
+  background: transparent;
+  border-radius: 3px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.tab:hover .tab-close,
+.tab.active .tab-close {
+  opacity: 1;
+}
+
+.tab-close:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.tab-dirty-mark {
+  font-size: 10px;
+  line-height: 1;
+  color: var(--text-secondary);
+  margin-left: 1px;
+  vertical-align: super;
+}
+
+/* Status Bar */
+.status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--statusbar-height);
+  padding: 0 12px;
+  background: var(--statusbar-bg);
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--statusbar-color);
+  flex-shrink: 0;
+}
+
+.status-bar-left {
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  flex: 1;
+}
+
+.status-bar-left.error {
+  color: var(--error);
+}
+
+.status-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+/* Context Menu */
+.context-menu {
+  position: fixed;
+  z-index: 10000;
+  min-width: 160px;
+  background: var(--menu-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  box-shadow: var(--menu-shadow);
+  padding: 4px 0;
+  font-size: 12px;
+}
+
+.context-menu-item {
+  display: flex;
+  align-items: center;
+  padding: 6px 12px;
+  cursor: pointer;
+  color: var(--text-primary);
+  transition: background 0.1s;
+  position: relative;
+}
+
+.context-menu-item:hover {
+  background: var(--menu-hover);
+}
+
+.context-menu-item.disabled {
+  color: var(--text-disabled);
+  cursor: default;
+}
+
+.context-menu-item.disabled:hover {
+  background: transparent;
+}
+
+.context-menu-check {
+  width: 16px;
+  flex-shrink: 0;
+  font-size: 11px;
+  text-align: center;
+}
+
+.context-menu-label {
+  flex: 1;
+}
+
+.context-menu-arrow {
+  margin-left: 12px;
+  font-size: 8px;
+  color: var(--text-secondary);
+}
+
+.context-menu-item.has-submenu {
+  padding-right: 8px;
+}
+
+.context-submenu {
+  position: absolute;
+  left: 100%;
+  top: 0;
+}
+
+.context-menu-separator {
+  height: 1px;
+  margin: 4px 8px;
+  background: var(--border);
+}
+
+/* Settings Dialog */
+.settings-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.settings-dialog {
+  width: 420px;
+  max-height: 80vh;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--menu-shadow);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.settings-body {
+  flex: 1;
+  padding: 16px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.settings-label {
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.settings-input {
+  width: 64px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 12px;
+  text-align: center;
+}
+
+.settings-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.settings-select {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.settings-select-option {
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border: none;
+  transition: background 0.15s, color 0.15s;
+}
+
+.settings-select-option.active {
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.settings-switch {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  background: var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.settings-switch.on {
+  background: var(--accent);
+}
+
+.settings-switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background: #ffffff;
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+
+.settings-switch.on::after {
+  transform: translateX(16px);
+}
+
+.settings-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+}
+
+.settings-btn {
+  padding: 6px 16px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  transition: background 0.15s;
+}
+
+.settings-btn:hover {
+  background: var(--bg-tertiary);
+}
+
+.settings-btn.primary {
+  background: var(--accent);
+  color: #ffffff;
+  border-color: var(--accent);
+}
+
+.settings-btn.primary:hover {
+  background: var(--accent-hover);
+}
+
+.monaco-editor .kindedit-additive-selection-0 {
+  background-color: rgba(255, 214, 10, 0.42) !important;
+  outline: 1px solid rgba(218, 165, 32, 0.55);
+}
+
+.monaco-editor .kindedit-additive-selection-1 {
+  background-color: rgba(45, 156, 219, 0.28) !important;
+  outline: 1px solid rgba(45, 156, 219, 0.5);
+}
+
+.monaco-editor .kindedit-additive-selection-2 {
+  background-color: rgba(39, 174, 96, 0.28) !important;
+  outline: 1px solid rgba(39, 174, 96, 0.5);
+}
+
+.monaco-editor .kindedit-additive-selection-3 {
+  background-color: rgba(235, 87, 87, 0.26) !important;
+  outline: 1px solid rgba(235, 87, 87, 0.48);
+}
+
+.monaco-editor .kindedit-additive-selection-4 {
+  background-color: rgba(155, 81, 224, 0.24) !important;
+  outline: 1px solid rgba(155, 81, 224, 0.46);
+}
+
+.monaco-editor .kindedit-additive-selection-5 {
+  background-color: rgba(242, 153, 74, 0.3) !important;
+  outline: 1px solid rgba(242, 153, 74, 0.52);
+}
+
+.monaco-editor .kindedit-additive-selection-6 {
+  background-color: rgba(86, 204, 242, 0.26) !important;
+  outline: 1px solid rgba(86, 204, 242, 0.46);
+}
+
+.monaco-editor .kindedit-additive-selection-7 {
+  background-color: rgba(111, 207, 151, 0.26) !important;
+  outline: 1px solid rgba(111, 207, 151, 0.48);
+}
+
+[data-theme="dark"] .monaco-editor .kindedit-additive-selection-0 {
+  background-color: rgba(255, 214, 10, 0.34) !important;
+}
+
+[data-theme="dark"] .monaco-editor .kindedit-additive-selection-1 {
+  background-color: rgba(45, 156, 219, 0.34) !important;
+}
+
+[data-theme="dark"] .monaco-editor .kindedit-additive-selection-2 {
+  background-color: rgba(39, 174, 96, 0.34) !important;
+}
+
+[data-theme="dark"] .monaco-editor .kindedit-additive-selection-3 {
+  background-color: rgba(235, 87, 87, 0.32) !important;
+}
+
+[data-theme="dark"] .monaco-editor .kindedit-additive-selection-4 {
+  background-color: rgba(155, 81, 224, 0.32) !important;
+}
+
+[data-theme="dark"] .monaco-editor .kindedit-additive-selection-5 {
+  background-color: rgba(242, 153, 74, 0.34) !important;
+}
+
+[data-theme="dark"] .monaco-editor .kindedit-additive-selection-6 {
+  background-color: rgba(86, 204, 242, 0.32) !important;
+}
+
+[data-theme="dark"] .monaco-editor .kindedit-additive-selection-7 {
+  background-color: rgba(111, 207, 151, 0.32) !important;
+}

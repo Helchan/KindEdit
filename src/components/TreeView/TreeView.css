@@ -1,0 +1,50 @@
+.tree-view-container {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--color-text-primary);
+}
+
+.tree-node-row {
+  transition: background-color 0.1s;
+  border-radius: 3px;
+  margin: 0 2px;
+}
+
+.tree-node-row:hover {
+  background-color: rgba(255, 255, 255, 0.04);
+}
+
+.tree-node-highlighted {
+  background-color: rgba(0, 122, 204, 0.15) !important;
+}
+
+.tree-node-arrow {
+  color: var(--color-text-secondary);
+}
+
+.tree-node-arrow:hover {
+  color: var(--color-text-primary);
+}
+
+/* 右键菜单 */
+.tree-context-menu {
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 4px 0;
+  min-width: 120px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.tree-context-menu-item {
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--color-text-primary);
+  font-family: var(--font-mono);
+}
+
+.tree-context-menu-item:hover {
+  background-color: var(--color-accent);
+  color: #fff;
+}
