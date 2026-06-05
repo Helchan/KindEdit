@@ -461,6 +461,49 @@ body {
   background: var(--accent-hover);
 }
 
+/* About Dialog */
+.about-dialog {
+  width: min(360px, calc(100vw - 48px));
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--menu-shadow);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 26px 28px 28px;
+  overflow: hidden;
+  user-select: none;
+}
+
+.about-icon {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  margin-bottom: 14px;
+  pointer-events: none;
+}
+
+.about-name {
+  font-size: 15px;
+  line-height: 1.3;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 10px;
+}
+
+.about-version,
+.about-copyright {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.about-version {
+  margin-bottom: 6px;
+}
+
 .monaco-editor .kindedit-additive-selection-0 {
   background-color: rgba(255, 214, 10, 0.42) !important;
   outline: 1px solid rgba(218, 165, 32, 0.55);

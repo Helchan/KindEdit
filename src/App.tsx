@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { getVersion } from '@tauri-apps/api/app';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { open, save, message, ask } from '@tauri-apps/plugin-dialog';
+import { open, save, ask } from '@tauri-apps/plugin-dialog';
 
 import MonacoEditor from './components/Editor/MonacoEditor';
 import MilkdownEditor, { type MilkdownEditorHandle } from './components/Editor/MilkdownEditor';
@@ -13,6 +13,7 @@ import TreeView from './components/TreeView/TreeView';
 import Resizer from './components/TreeView/Resizer';
 import MarkdownPreview from './components/Markdown/MarkdownPreview';
 import SettingsDialog from './components/Settings/SettingsDialog';
+import AboutDialog from './components/About/AboutDialog';
 import ContextMenu, { MenuItem } from './components/ContextMenu/ContextMenu';
 
 import { useTabStore } from './stores/tabStore';
@@ -64,13 +65,13 @@ function App() {
 
   const handleAbout = useCallback(async () => {
     const version = await getVersion();
-    await message(`KindEdit v${version}\nRust + Tauri + React`, {
-      title: '关于 KindEdit',
-      kind: 'info',
-    });
+    setAboutVersion(version);
+    setAboutOpen(true);
   }, []);
 
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
+  const [aboutVersion, setAboutVersion] = useState('');
   const [sessionRestored, setSessionRestored] = useState(false);
   const [treeNodes, setTreeNodes] = useState<TreeNode[]>([]);
   const [splitRatio, setSplitRatio] = useState(0.3);
@@ -789,6 +790,11 @@ function App() {
           }
           saveConfig();
         }}
+      />
+      <AboutDialog
+        open={aboutOpen}
+        version={aboutVersion}
+        onClose={() => setAboutOpen(false)}
       />
       <ContextMenu
         visible={contextMenuVisible}
