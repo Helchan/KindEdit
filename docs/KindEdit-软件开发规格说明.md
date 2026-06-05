@@ -6,7 +6,7 @@
 
 KindEdit 是一款基于 Tauri 2、React 18、TypeScript 和 Rust 的跨平台桌面编辑器应用，当前主要面向 Windows 和 macOS。应用提供多标签文本编辑、结构化文档树视图、Markdown 所见即所得编辑、格式化与压缩、主题与字体配置、会话恢复等能力。
 
-当前版本号为 `0.0.7`，版本声明至少存在于以下位置：
+当前版本号为 `0.0.12`，版本声明至少存在于以下位置：
 
 - `package.json`
 - `package-lock.json`
@@ -16,6 +16,23 @@ KindEdit 是一款基于 Tauri 2、React 18、TypeScript 和 Rust 的跨平台�
 版本号递增时必须同步检查并更新所有实际参与构建、打包、显示或发布的版本声明位置。
 
 ## 2. 技术栈与运行形态
+
+当前技术版本基线：
+
+| 类型 | 声明位置 | 声明版本 | 当前锁定/确认版本 | 说明 |
+| --- | --- | --- | --- | --- |
+| Tauri Rust crate | `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock` | `tauri = "2"` | `2.11.2` | Rust 后端与桌面运行时核心版本。 |
+| Tauri CLI | `package.json`, `package-lock.json` | `@tauri-apps/cli = ^2.0.0` | `2.11.2` | 官方构建和打包命令入口依赖。 |
+| Tauri JavaScript API | `package.json`, `package-lock.json` | `@tauri-apps/api = ^2.0.0` | `2.11.0` | 前端访问 Tauri 能力的 API 版本。 |
+| React | `package.json`, `package-lock.json` | `react = ^18.3.1` | `18.3.1` | 前端 UI 框架版本。 |
+| React DOM | `package.json`, `package-lock.json` | `react-dom = ^18.3.1` | `18.3.1` | React DOM 渲染版本。 |
+| Monaco Editor | `package.json`, `package-lock.json` | `monaco-editor = ^0.50.0` | `0.50.0` | 非 Markdown 文档的核心编辑器。 |
+| Monaco React Adapter | `package.json`, `package-lock.json` | `@monaco-editor/react = ^4.6.0` | `4.7.0` | Monaco 与 React 的适配层。 |
+| Milkdown | `package.json`, `package-lock.json` | `@milkdown/kit = ^7.21.1` | `7.21.1` | Markdown 所见即所得编辑器核心能力。 |
+| Milkdown React Adapter | `package.json`, `package-lock.json` | `@milkdown/react = ^7.21.1` | `7.21.1` | Milkdown 与 React 的适配层。 |
+| Rust edition | `src-tauri/Cargo.toml` | `edition = "2021"` | Rust 2021 | 当前仓库未固定 `rust-toolchain`，不能假设使用高于当前构建环境的 Rust 语言特性。 |
+
+开发和修改代码时，必须优先以 `package.json`、`package-lock.json`、`src-tauri/Cargo.toml`、`src-tauri/Cargo.lock` 中的声明和锁定版本为准。若依赖升级、降级或新增会影响上述基线，必须同步更新本文档、锁文件和对应验证说明。
 
 前端技术栈：
 
@@ -99,8 +116,9 @@ Rust 后端职责：
 
 应用图标：
 
-- KindEdit 使用中性 macOS 风格石墨色圆角矩形底座、后层蓝色文档页、前层白色文档页和绿色插入光标组成的简约图标，表达文本编辑、代码编辑和文档处理能力。
-- 图标不显示外层直角底图；石墨色圆角矩形底座之外的区域必须保持透明，避免在桌面、Dock、启动器或安装包视图中出现黑色方块背景。
+- KindEdit 使用无底座的双文档层图标：后层蓝色文档页、前层白色竖向文档页、旧版质感的自然折角、文本线条和绿色插入光标共同表达文本编辑、代码编辑和文档处理能力。
+- 图标不显示外层直角底图、圆角矩形底座或主题色底座；双文档图形之外的区域必须保持透明，双文档组合应保持偏竖向的文档比例，并按高可见度主体边界进行视觉居中，避免在桌面、Dock、启动器或安装包视图中出现背景块、贴边压迫感、视觉偏移或多余留白。
+- 后层蓝色文档不得在前层白色文档右上折角区域外露；右上折角应采用接近旧版图标的较小卷页形态、弧形下沿和轻量柔和投影。
 - 桌面打包图标由 `src-tauri/icons/icon.png` 派生，macOS 使用 `src-tauri/icons/icon.icns`，Windows 使用 `src-tauri/icons/icon.ico`，并保留 `32x32.png`、`64x64.png`、`128x128.png`、`128x128@2x.png` 等 PNG 尺寸资源。
 - Tauri 打包配置在 `src-tauri/tauri.conf.json` 的 `bundle.icon` 中显式引用桌面图标资源，确保 macOS 和 Windows 安装产物使用一致的应用图标。
 
