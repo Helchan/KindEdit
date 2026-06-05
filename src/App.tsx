@@ -5,7 +5,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { open, save, message, ask } from '@tauri-apps/plugin-dialog';
 
 import MonacoEditor from './components/Editor/MonacoEditor';
-import MilkdownEditor from './components/Editor/MilkdownEditor';
+import MilkdownEditor, { type MilkdownEditorHandle } from './components/Editor/MilkdownEditor';
 import TabBar from './components/Tabs/TabBar';
 import Toolbar from './components/Toolbar/Toolbar';
 import StatusBar from './components/StatusBar/StatusBar';
@@ -79,11 +79,38 @@ function App() {
   const [highlightedPath, setHighlightedPath] = useState<string | undefined>(undefined);
   const parseTimerRef = useRef<number | null>(null);
   const cursorSyncTimerRef = useRef<number | null>(null);
+  const milkdownEditorRef = useRef<MilkdownEditorHandle | null>(null);
 
   // 右键菜单状态
   const [contextMenuVisible, setContextMenuVisible] = useState(false);
   const [contextMenuX, setContextMenuX] = useState(0);
   const [contextMenuY, setContextMenuY] = useState(0);
+
+  const handleUndo = useCallback(() => {
+    const tab = getActiveTab();
+    if (!tab) return;
+
+    if (getViewMode(tab.docType) === 'Milkdown') {
+      milkdownEditorRef.current?.undo();
+      return;
+    }
+
+    editorStore.editorInstance?.trigger('toolbar', 'undo', null);
+    editorStore.editorInstance?.focus();
+  }, [editorStore.editorInstance, getActiveTab]);
+
+  const handleRedo = useCallback(() => {
+    const tab = getActiveTab();
+    if (!tab) return;
+
+    if (getViewMode(tab.docType) === 'Milkdown') {
+      milkdownEditorRef.current?.redo();
+      return;
+    }
+
+    editorStore.editorInstance?.trigger('toolbar', 'redo', null);
+    editorStore.editorInstance?.focus();
+  }, [editorStore.editorInstance, getActiveTab]);
 
   // 初始化：加载配置 + 恢复会话
   useEffect(() => {
@@ -692,6 +719,7 @@ function App() {
         {viewMode === 'Milkdown' && (
           <div style={{ flex: 1, overflow: 'auto' }}>
             <MilkdownEditor
+              ref={milkdownEditorRef}
               key={activeTab.id}
               tabId={activeTab.id}
               value={activeTab.content || ''}
@@ -726,6 +754,8 @@ function App() {
       <Toolbar
         onOpenFile={handleOpenFile}
         onSaveFile={handleSaveFile}
+        onUndo={handleUndo}
+        onRedo={handleRedo}
         onOpenSettings={() => setSettingsOpen(true)}
         onAbout={handleAbout}
       />

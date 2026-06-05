@@ -105,7 +105,7 @@ Rust 后端职责：
 
 当前主界面由以下区域组成：
 
-- 顶部工具栏：打开文件、保存、设置、关于。
+- 顶部工具栏：打开文件、保存、回退、重做、设置、关于；打开/保存/回退/重做属于同一组，右侧使用竖线与设置/关于分隔。
 - 标签栏：显示已打开标签、脏状态、文档类型，支持选择、关闭和新建标签。
 - 主编辑区域：根据文档类型显示单编辑器、树视图+编辑器，或 Markdown 编辑器。
 - 底部状态栏：显示状态消息、错误信息、文档类型和 Monaco 光标位置。
@@ -215,11 +215,12 @@ Rust 后端职责：
 
 Markdown 文档使用 Milkdown：
 
-- 启用 commonmark、GFM、listener、prism 和 nord 主题。
+- 启用 commonmark、GFM、listener、history、prism 和 nord 主题。
 - Markdown 编辑器以所见即所得方式呈现。
 - 切换标签时通过 `tabId` 重新挂载 MilkdownProvider，确保加载当前标签内容。
 - Markdown 查找支持大小写匹配、全词匹配和正则。
 - Markdown 替换支持替换当前匹配和替换全部。
+- 顶部工具栏“回退”和“重做”只作用于当前活动标签页；非 Markdown 文档调用当前 Monaco 实例的 undo/redo，Markdown 文档调用当前 Milkdown/ProseMirror 实例的 undo/redo。
 
 ## 8. 快捷键
 

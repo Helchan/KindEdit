@@ -1,10 +1,12 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Milkdown, MilkdownProvider, useEditor } from '@milkdown/react';
 import { Editor, rootCtx, defaultValueCtx, commandsCtx, prosePluginsCtx } from '@milkdown/kit/core';
 import { commonmark } from '@milkdown/kit/preset/commonmark';
 import { gfm } from '@milkdown/kit/preset/gfm';
 import { listener, listenerCtx } from '@milkdown/plugin-listener';
 import { prism } from '@milkdown/plugin-prism';
+import { history } from '@milkdown/kit/plugin/history';
+import { redo, undo } from '@milkdown/kit/prose/history';
 import { nord } from '@milkdown/theme-nord';
 import { $shortcut } from '@milkdown/kit/utils';
 import type { Node as ProseMirrorNode } from '@milkdown/kit/prose/model';
@@ -32,6 +34,12 @@ interface MilkdownEditorProps {
   onChange: (value: string) => void;
   fontSize?: number;
   tabId: string;
+}
+
+export interface MilkdownEditorHandle {
+  undo: () => boolean;
+  redo: () => boolean;
+  focus: () => void;
 }
 
 interface SearchOptions {
@@ -143,11 +151,11 @@ function createSearchPlugin(onViewReady: (view: EditorView | null) => void) {
 /**
  * Inner editor component that uses MilkdownProvider context.
  */
-const MilkdownEditorInner: React.FC<MilkdownEditorProps> = ({
+const MilkdownEditorInner = forwardRef<MilkdownEditorHandle, MilkdownEditorProps>(({
   value,
   onChange,
   fontSize = 14,
-}) => {
+}, ref) => {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const editorViewRef = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
@@ -171,6 +179,26 @@ const MilkdownEditorInner: React.FC<MilkdownEditorProps> = ({
     wholeWord,
     regex,
   }), [caseSensitive, query, regex, wholeWord]);
+
+  useImperativeHandle(ref, () => ({
+    undo: () => {
+      const view = editorViewRef.current;
+      if (!view) return false;
+      const handled = undo(view.state, view.dispatch, view);
+      if (handled) view.focus();
+      return handled;
+    },
+    redo: () => {
+      const view = editorViewRef.current;
+      if (!view) return false;
+      const handled = redo(view.state, view.dispatch, view);
+      if (handled) view.focus();
+      return handled;
+    },
+    focus: () => {
+      editorViewRef.current?.focus();
+    },
+  }), []);
 
   const updateSearchDecorations = useCallback((nextActiveIndex = activeIndex) => {
     const view = editorViewRef.current;
@@ -402,6 +430,7 @@ const MilkdownEditorInner: React.FC<MilkdownEditorProps> = ({
       .use(commonmark)
       .use(gfm)
       .use(listener)
+      .use(history)
       .use(prism)
       .use(typoraShortcuts);
 
@@ -498,7 +527,7 @@ const MilkdownEditorInner: React.FC<MilkdownEditorProps> = ({
       <Milkdown />
     </div>
   );
-};
+});
 
 /**
  * MilkdownEditor - A Typora-style WYSIWYG Markdown editor component.
@@ -506,12 +535,15 @@ const MilkdownEditorInner: React.FC<MilkdownEditorProps> = ({
  * Uses key-based remounting when tabId changes to reinitialize
  * the editor with new content.
  */
-const MilkdownEditor: React.FC<MilkdownEditorProps> = (props) => {
+const MilkdownEditor = forwardRef<MilkdownEditorHandle, MilkdownEditorProps>((props, ref) => {
   return (
     <MilkdownProvider key={props.tabId}>
-      <MilkdownEditorInner {...props} />
+      <MilkdownEditorInner {...props} ref={ref} />
     </MilkdownProvider>
   );
-};
+});
+
+MilkdownEditorInner.displayName = 'MilkdownEditorInner';
+MilkdownEditor.displayName = 'MilkdownEditor';
 
 export default MilkdownEditor;

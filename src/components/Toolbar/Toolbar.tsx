@@ -1,11 +1,13 @@
 interface ToolbarProps {
   onOpenFile: () => void;
   onSaveFile: () => void;
+  onUndo: () => void;
+  onRedo: () => void;
   onOpenSettings: () => void;
   onAbout: () => void;
 }
 
-export default function Toolbar({ onOpenFile, onSaveFile, onOpenSettings, onAbout }: ToolbarProps) {
+export default function Toolbar({ onOpenFile, onSaveFile, onUndo, onRedo, onOpenSettings, onAbout }: ToolbarProps) {
   return (
     <div className="toolbar">
       <button className="toolbar-btn" onClick={onOpenFile} title="打开文件">
@@ -18,6 +20,19 @@ export default function Toolbar({ onOpenFile, onSaveFile, onOpenSettings, onAbou
           <path d="M3 2h8l3 3v9H3V2z" />
           <path d="M5 2v4h5V2" />
           <path d="M5 10h6" />
+        </svg>
+      </button>
+      <div className="toolbar-separator" />
+      <button className="toolbar-btn" onClick={onUndo} title="回退">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M6.2 3.4L3 6.6l3.2 3.2" />
+          <path d="M3 6.6h6.7a3.4 3.4 0 0 1 0 6.8H7.5" />
+        </svg>
+      </button>
+      <button className="toolbar-btn" onClick={onRedo} title="重做">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M9.8 3.4L13 6.6l-3.2 3.2" />
+          <path d="M13 6.6H6.3a3.4 3.4 0 0 0 0 6.8h2.2" />
         </svg>
       </button>
       <div className="toolbar-separator" />
