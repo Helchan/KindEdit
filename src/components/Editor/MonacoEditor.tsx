@@ -35,6 +35,9 @@ export default function MonacoEditor({
   const suppressChangeRef = useRef(false);
   const additiveHighlighterRef = useRef<AdditiveSelectionHighlighter | null>(null);
   const additiveMouseSelectionRef = useRef(false);
+  const onCursorPositionChangeRef = useRef(onCursorPositionChange);
+  const onCursorOffsetChangeRef = useRef(onCursorOffsetChange);
+  const onContextMenuRef = useRef(onContextMenu);
   const { handleBeforeMount } = useMonaco();
   const { setEditorInstance, setCursorPosition, setCurrentLanguage, isLargeFile } =
     useEditorStore();
@@ -82,6 +85,19 @@ export default function MonacoEditor({
     });
   }, [addCurrentSelectionHighlights]);
 
+  const emitCursorPosition = useCallback((editorInstance: editor.IStandaloneCodeEditor, position: { lineNumber: number; column: number } | null) => {
+    if (!position) return;
+
+    const { lineNumber, column } = position;
+    setCursorPosition(lineNumber, column);
+    onCursorPositionChangeRef.current?.(lineNumber, column);
+
+    const model = editorInstance.getModel();
+    if (model) {
+      onCursorOffsetChangeRef.current?.(model.getOffsetAt(position));
+    }
+  }, [setCursorPosition]);
+
   const handleEditorMount: OnMount = useCallback(
     (editorInstance, monaco) => {
       editorRef.current = editorInstance;
@@ -93,17 +109,7 @@ export default function MonacoEditor({
 
       // 监听光标位置变化
       editorInstance.onDidChangeCursorPosition((e) => {
-        const { lineNumber, column } = e.position;
-        setCursorPosition(lineNumber, column);
-        onCursorPositionChange?.(lineNumber, column);
-        // 计算 offset 用于反向同步
-        if (onCursorOffsetChange) {
-          const model = editorInstance.getModel();
-          if (model) {
-            const offset = model.getOffsetAt(e.position);
-            onCursorOffsetChange(offset);
-          }
-        }
+        emitCursorPosition(editorInstance, e.position);
       });
 
       const domNode = editorInstance.getDomNode();
@@ -133,9 +139,13 @@ export default function MonacoEditor({
       });
 
       editorInstance.onMouseUp((e) => {
-        if (!additiveMouseSelectionRef.current && !isAdditiveSelectionModifier(e.event.browserEvent)) return;
-        additiveMouseSelectionRef.current = false;
-        queueCurrentSelectionHighlights();
+        if (additiveMouseSelectionRef.current || isAdditiveSelectionModifier(e.event.browserEvent)) {
+          additiveMouseSelectionRef.current = false;
+          queueCurrentSelectionHighlights();
+          return;
+        }
+
+        emitCursorPosition(editorInstance, editorInstance.getPosition());
       });
 
       // 自定义右键菜单（忽略 Ctrl+Click 触发的 contextmenu）
@@ -143,10 +153,10 @@ export default function MonacoEditor({
         if (e.event.ctrlKey) return; // macOS Ctrl+Click 不弹菜单
         e.event.preventDefault();
         e.event.stopPropagation();
-        onContextMenu?.({ x: e.event.posx, y: e.event.posy });
+        onContextMenuRef.current?.({ x: e.event.posx, y: e.event.posy });
       });
     },
-    [language, value, onCursorPositionChange, onCursorOffsetChange, onContextMenu, setCursorPosition, setCurrentLanguage, setEditorInstance, syncModelValue, isAdditiveSelectionModifier, queueCurrentSelectionHighlights]
+    [language, value, setCurrentLanguage, setEditorInstance, syncModelValue, isAdditiveSelectionModifier, queueCurrentSelectionHighlights, emitCursorPosition]
   );
 
   const handleBeforeMountCallback: BeforeMount = useCallback(
@@ -165,6 +175,18 @@ export default function MonacoEditor({
     },
     [onChange]
   );
+
+  useEffect(() => {
+    onCursorPositionChangeRef.current = onCursorPositionChange;
+  }, [onCursorPositionChange]);
+
+  useEffect(() => {
+    onCursorOffsetChangeRef.current = onCursorOffsetChange;
+  }, [onCursorOffsetChange]);
+
+  useEffect(() => {
+    onContextMenuRef.current = onContextMenu;
+  }, [onContextMenu]);
 
   // Monaco 是独立模型系统，这里把外部 tab 内容同步到当前模型。
   useEffect(() => {

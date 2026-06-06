@@ -21,6 +21,7 @@ export interface TreeViewProps {
   onCopyNodeValue?: (node: TreeNode) => void;
   onCopyNodePath?: (node: TreeNode) => void;
   highlightedPath?: string;
+  highlightedSignal?: number;
   fontSize?: number;
 }
 

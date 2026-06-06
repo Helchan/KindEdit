@@ -6,7 +6,7 @@
 
 KindEdit 是一款基于 Tauri 2、React 18、TypeScript 和 Rust 的跨平台桌面编辑器应用，当前主要面向 Windows 和 macOS。应用提供多标签文本编辑、结构化文档树视图、Markdown 所见即所得编辑、格式化与压缩、主题与字体配置、会话恢复等能力。
 
-当前版本号为 `0.1.19`，版本声明至少存在于以下位置：
+当前版本号为 `0.1.21`，版本声明至少存在于以下位置：
 
 - `package.json`
 - `package-lock.json`
@@ -49,7 +49,7 @@ KindEdit 是一款基于 Tauri 2、React 18、TypeScript 和 Rust 的跨平台�
 
 - Rust
 - Tauri 2
-- serde / serde_json / serde_yaml
+- serde / serde_json（启用 `preserve_order`，JSON 对象构树和格式化/压缩保留源码键顺序）/ serde_yaml
 - quick-xml
 - sqlformat
 - dirs
@@ -320,8 +320,9 @@ Monaco 语言映射：
 树视图行为：
 
 - JSON、XML、YAML 当前显示结构树。
+- JSON 树视图按编辑器源码中的对象键顺序和数组元素顺序构建，不按键名重新排序。
 - 点击树节点时，如果同步显示开启，Monaco 光标移动到节点起始 offset，并滚动到视图中心。
-- Monaco 光标变化时，如果同步显示开启，前端以约 100ms 防抖查找包含当前 offset 的最内层树节点，并高亮对应路径。
+- Monaco 光标变化或用户点击编辑器位置时，如果同步显示开启，前端以约 100ms 防抖查找包含当前 offset 的最内层树节点，高亮对应路径，并在父节点折叠时自动展开和滚动到可见位置。
 - 树视图分栏宽度通过拖拽调整，范围约为窗口宽度的 15% 到 60%。
 
 ## 11. 格式化、压缩与右键菜单

@@ -362,6 +362,25 @@ mod tests {
     }
 
     #[test]
+    fn test_build_tree_preserves_source_order_and_offsets() {
+        let doc = JsonDocument;
+        let input = "{\n  \"z\": 1,\n  \"a\": {\"inner\": true},\n  \"m\": null\n}";
+        let tree = doc.build_tree(input).unwrap();
+        let root = &tree[0];
+
+        assert_eq!(root.children[0].key, "z");
+        assert_eq!(root.children[1].key, "a");
+        assert_eq!(root.children[2].key, "m");
+
+        let a_node = &root.children[1];
+        let a_key_offset = input.find("\"a\"").unwrap();
+        let inner_offset = input.find("inner").unwrap();
+        assert!(a_node.start_offset <= a_key_offset);
+        assert!(a_node.start_offset <= inner_offset);
+        assert!(inner_offset < a_node.end_offset);
+    }
+
+    #[test]
     fn test_build_tree_array() {
         let doc = JsonDocument;
         let input = "[1, 2, 3]";

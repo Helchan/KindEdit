@@ -37,6 +37,7 @@ export default function TreeView({
   onCopyNodeValue,
   onCopyNodePath,
   highlightedPath,
+  highlightedSignal = 0,
   fontSize = 13,
 }: TreeViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -76,7 +77,7 @@ export default function TreeView({
 
   const flatNodes = useMemo(() => flattenNodes(nodesWithExpand), [nodesWithExpand]);
 
-  // 当 highlightedPath 改变时，自动展开路径上所有父节点并滚动到可见
+  // 当 highlightedPath 改变时，自动展开路径上所有父节点
   useEffect(() => {
     if (!highlightedPath) return;
 
@@ -108,9 +109,13 @@ export default function TreeView({
       });
     }
 
-    // 滚动到高亮节点（等展开生效后）
+  }, [highlightedPath, highlightedSignal, nodes]);
+
+  // 展开状态生效并重新扁平化后，再滚动到高亮节点。
+  useEffect(() => {
+    if (!highlightedPath) return;
+
     requestAnimationFrame(() => {
-      // 使用更新后的 flatNodes 来找到节点索引
       const idx = flatNodes.findIndex((fn) => fn.node.path === highlightedPath);
       if (idx >= 0 && containerRef.current) {
         const targetTop = idx * NODE_HEIGHT;
@@ -122,7 +127,7 @@ export default function TreeView({
         }
       }
     });
-  }, [highlightedPath, nodes]);
+  }, [highlightedPath, highlightedSignal, flatNodes]);
 
   const handleToggle = useCallback((node: TreeNode) => {
     setExpandedPaths((prev) => {

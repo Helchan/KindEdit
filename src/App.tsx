@@ -41,6 +41,31 @@ function getTabSaveSubject(tab: TabState): string {
   return tab.filePath || tab.title || 'Untitled';
 }
 
+function findPathForOffsetInTree(nodes: TreeNode[], offset: number): string | null {
+  let bestPath: string | null = null;
+  let bestLen = Infinity;
+
+  function walk(node: TreeNode) {
+    if (node.startOffset <= offset && offset < node.endOffset) {
+      const len = node.endOffset - node.startOffset;
+      if (len < bestLen) {
+        bestPath = node.path;
+        bestLen = len;
+      }
+    }
+
+    for (const child of node.children) {
+      walk(child);
+    }
+  }
+
+  for (const root of nodes) {
+    walk(root);
+  }
+
+  return bestPath;
+}
+
 function App() {
   const { resolved: theme } = useTheme();
   const { config, loadConfig, updateConfig, saveConfig } = useConfigStore();
@@ -71,6 +96,7 @@ function App() {
   const [statusMessage, setStatusMessage] = useState('');
   const [statusIsError, setStatusIsError] = useState(false);
   const [highlightedPath, setHighlightedPath] = useState<string | undefined>(undefined);
+  const [highlightedSignal, setHighlightedSignal] = useState(0);
   const parseTimerRef = useRef<number | null>(null);
   const cursorSyncTimerRef = useRef<number | null>(null);
   const milkdownEditorRef = useRef<MilkdownEditorHandle | null>(null);
@@ -549,30 +575,7 @@ function App() {
 
   // 反向同步：根据 offset 查找最内层包含该位置的树节点
   const findPathForOffset = useCallback((nodes: TreeNode[], offset: number): string | null => {
-    let bestPath: string | null = null;
-    let bestLen = Infinity;
-
-    function walk(node: TreeNode) {
-      if (node.startOffset !== undefined && node.endOffset !== undefined) {
-        if (node.startOffset <= offset && offset <= node.endOffset) {
-          const len = node.endOffset - node.startOffset;
-          if (len < bestLen) {
-            bestPath = node.path;
-            bestLen = len;
-          }
-        }
-      }
-      if (node.children) {
-        for (const child of node.children) {
-          walk(child);
-        }
-      }
-    }
-
-    for (const root of nodes) {
-      walk(root);
-    }
-    return bestPath;
+    return findPathForOffsetInTree(nodes, offset);
   }, []);
 
   // 编辑器光标偏移变化 — 防抖反向同步到树
@@ -584,6 +587,9 @@ function App() {
     cursorSyncTimerRef.current = window.setTimeout(() => {
       const path = findPathForOffset(treeNodes, offset);
       setHighlightedPath(path || undefined);
+      if (path) {
+        setHighlightedSignal((signal) => signal + 1);
+      }
     }, 100);
   }, [config.syncDisplay, treeNodes, findPathForOffset]);
 
@@ -816,6 +822,7 @@ function App() {
                 nodes={treeNodes}
                 onNodeClick={handleTreeNodeClick}
                 highlightedPath={highlightedPath}
+                highlightedSignal={highlightedSignal}
                 fontSize={config.treeFontSize || 13}
               />
             </div>
