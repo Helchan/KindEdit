@@ -136,6 +136,7 @@ function App() {
   const setActiveTab = useTabStore(s => s.setActiveTab);
   const updateTab = useTabStore(s => s.updateTab);
   const getActiveTab = useTabStore(s => s.getActiveTab);
+  const reorderTabs = useTabStore(s => s.reorderTabs);
 
   const restoreTabs = useTabStore(s => s.restoreTabs);
 
@@ -246,12 +247,14 @@ function App() {
               }
             }
 
+            const isScratchDraft = !t.filePath;
+
             restoredTabs.push({
               id: t.id,
               title: t.title,
               filePath: t.filePath,
               docType,
-              dirty: false, // 恢复后标记为非脏
+              dirty: isScratchDraft ? (t.dirty || content.length > 0) : false,
               content,
               isLarge: false,
               userSetType: !!t.filePath, // 有文件路径的 tab 视为已确定类型
@@ -473,7 +476,8 @@ function App() {
     }
 
     closeTab(id);
-  }, [closeTab, requestSaveConfirmation, saveTabBeforeClose]);
+    await saveSessionNow();
+  }, [closeTab, requestSaveConfirmation, saveSessionNow, saveTabBeforeClose]);
 
   // 窗口关闭前：保存会话 + 未保存提示
   useEffect(() => {
@@ -488,7 +492,7 @@ function App() {
       event.preventDefault();
 
       try {
-        const dirtyTabs = useTabStore.getState().tabs.filter(t => t.dirty);
+        const dirtyTabs = useTabStore.getState().tabs.filter(t => t.filePath && t.dirty);
 
         if (dirtyTabs.length > 0) {
           const allowNoAll = dirtyTabs.length > 1;
@@ -936,6 +940,7 @@ function App() {
           onSelectTab={setActiveTab}
           onCloseTab={handleCloseTab}
           onNewTab={() => addTab()}
+          onReorderTabs={reorderTabs}
         />
       )}
       <div className="main-content" style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>

@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::fs;
 
 use super::config::AppConfig;
@@ -82,6 +83,7 @@ impl SessionData {
 
         // Prepare session data, separating large content into files
         let mut save_session = self.clone();
+        let mut active_autosave_files = HashSet::new();
 
         for tab in &mut save_session.tabs {
             if let Some(ref content) = tab.content {
@@ -92,6 +94,24 @@ impl SessionData {
                     fs::write(&file_path, content)?;
                     tab.autosave_file = Some(filename);
                     tab.content = None; // Don't store in JSON
+                }
+            }
+
+            if let Some(ref autosave_file) = tab.autosave_file {
+                active_autosave_files.insert(autosave_file.clone());
+            }
+        }
+
+        if let Ok(entries) = fs::read_dir(&tabs_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if !path.extension().is_some_and(|ext| ext == "txt") {
+                    continue;
+                }
+                if let Some(filename) = path.file_name().and_then(|name| name.to_str()) {
+                    if !active_autosave_files.contains(filename) {
+                        let _ = fs::remove_file(path);
+                    }
                 }
             }
         }

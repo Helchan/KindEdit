@@ -148,10 +148,17 @@ body {
   color: var(--text-secondary);
   position: relative;
   max-width: 180px;
+  touch-action: none;
+  will-change: transform;
 }
 
 .tab:hover {
   background: var(--tab-hover-bg);
+}
+
+.tab.dragging {
+  cursor: grabbing;
+  z-index: 2;
 }
 
 .tab.active {
