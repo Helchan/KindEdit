@@ -162,13 +162,18 @@
 
 ## 编译、构建与打包要求
 
-- 修复、优化或新功能开发完成后，必须执行项目根目录的 `build_package.command` 进行构建打包。
-- `build_package.command` 是项目官方构建打包入口；编译、构建、打包为 macOS `.app` 或 `.dmg` 时，必须直接使用该脚本实施。
-- 如果后续需要生成 Windows 安装包或其他平台产物，也应优先通过 `build_package.command` 实施；如果脚本尚不支持目标产物，必须先优化修复该脚本，再通过该脚本实施。
-- 不得绕过 `build_package.command` 手工执行零散构建、复制、打包或生成 `.dmg` 的命令，除非用户明确要求临时诊断。
-- 如果 `build_package.command` 无法满足当前编译、构建、打包、产物命名、产物路径、清理、跨平台兼容或错误处理要求，必须优先优化修复该脚本。
-- 修复 `build_package.command` 后，必须再次使用该脚本完成实际构建或打包验证。
-- 构建脚本应作为项目官方构建入口持续维护，后续构建流程变化应沉淀到该脚本中，不能只停留在聊天记录或一次性命令中。
+- 修复、优化或新功能开发完成后，本地 macOS 验证必须执行项目根目录的 `build_package.command` 进行构建打包。
+- `build_package.command` 是本地 macOS 打包入口；本地编译、构建、打包为 macOS `.app` 或 `.dmg` 时，必须直接使用该脚本实施。
+- `build_package.command` 不承担 GitHub Actions 跨平台自动打包职责；GitHub Actions 的 macOS 和 Windows 自动编译打包应通过 `.github/workflows/*` 中的独立 workflow 实施，不能为了 CI 打包需求破坏或复杂化本地 macOS 打包脚本。
+- GitHub Actions 自动编译打包必须使用 tag 触发，不能配置为普通 `commit` 或普通分支 `push` 触发；平时只提交和推送代码时不应触发自动编译打包。
+- 如果用户明确提到“触发 GitHub 上的自动编译打包”或等价要求，视为明确授权智能体执行 `git tag` 和 `git push` 推送 tag；tag 版本号必须使用当时已提交代码中的项目版本号，默认从 `package.json` 的 `version` 读取并生成 `v{version}` 形式的 tag。
+- 触发 GitHub Actions 自动编译打包前必须先检查版本声明一致性，至少确认 `package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` 中的版本号一致；如不一致，必须先说明并等待用户确认处理方式。
+- 触发 GitHub Actions 自动编译打包前必须检查 `git status`；如果存在未提交改动，必须说明 tag 只能指向当前已提交的 `HEAD`，不得把未提交工作区状态伪装为发布代码。
+- 推送自动打包 tag 必须使用 SSH 远程；如果当前远程不是 SSH URL，必须先向用户说明并等待确认，不得自行改用 HTTPS 推送。
+- 不得绕过 `build_package.command` 手工执行本地零散构建、复制、打包或生成 `.dmg` 的命令，除非用户明确要求临时诊断。
+- 如果 `build_package.command` 无法满足本地 macOS 编译、构建、打包、产物命名、产物路径、清理或错误处理要求，必须优先优化修复该脚本。
+- 修复 `build_package.command` 后，必须再次使用该脚本完成本地实际构建或打包验证。
+- 本地构建脚本和 GitHub Actions workflow 都应作为项目官方构建入口持续维护；本地 macOS 打包流程变化应沉淀到 `build_package.command`，CI 跨平台打包流程变化应沉淀到 `.github/workflows/*`。
 - 如果当前系统环境无法执行 `build_package.command` 或无法生成目标平台产物，不能绕过脚本伪造结果，必须在交付说明中明确失败原因、缺失环境、影响范围和下一步处理方式。
 - 执行打包后，交付说明必须明确实际使用的命令、生成的 `.app` 或 `.dmg` 路径，以及是否完成清理构建。
 
@@ -195,6 +200,7 @@
 - `commit` 和 `push` 必须由用户明确提出后才允许执行；智能体不得根据任务完成状态自行决定提交或推送。
 - 只有用户明确要求“提交”或 `commit` 时，智能体才允许执行 `git add` 和 `git commit`。
 - 只有用户明确要求 `push` 或“推送”时，智能体才允许执行 `git push`。
+- 只有用户明确要求“触发 GitHub 上的自动编译打包”或等价表述时，智能体才允许按编译打包规则创建并推送自动打包 tag。
 - 禁止未经用户明确指令直接提交、推送、打 tag、创建 release 或修改远程分支。
 - 提交前必须检查 `git status` 和相关 diff，只能暂存与当前任务相关的文件。
 - 不得把无关改动、临时文件、缓存文件、构建中间产物或未确认的大型产物加入提交。
