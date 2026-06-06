@@ -863,7 +863,7 @@ function App() {
   };
 
   return (
-    <div className="app" data-theme={theme}>
+    <div className="app">
       <Toolbar
         onOpenFile={handleOpenFile}
         onSaveFile={handleSaveFile}

@@ -6,7 +6,7 @@
 
 KindEdit 是一款基于 Tauri 2、React 18、TypeScript 和 Rust 的跨平台桌面编辑器应用，当前主要面向 Windows 和 macOS。应用提供多标签文本编辑、结构化文档树视图、Markdown 所见即所得编辑、格式化与压缩、主题与字体配置、会话恢复等能力。
 
-当前版本号为 `0.1.21`，版本声明至少存在于以下位置：
+当前版本号为 `0.1.23`，版本声明至少存在于以下位置：
 
 - `package.json`
 - `package-lock.json`
@@ -416,6 +416,7 @@ Rust 配置结构在配置文件缺失字段时的反序列化默认值：
 - macOS 通过 `defaults read -g AppleInterfaceStyle` 检测系统深色模式。
 - Windows 通过注册表 `HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize` 的 `AppsUseLightTheme` 检测系统主题。
 - 主题应用后会设置 `document.documentElement` 的 `data-theme`。
+- 明亮与暗色主题切换时，标签栏、标签、关闭按钮和新建标签按钮的背景状态必须即时切换，不使用背景色过渡动画，避免标签区域出现可见闪动；日常 hover、active 状态仍保留即时反馈。
 - 前端调用 Rust `set_window_theme` 同步原生窗口主题。
 - 系统主题变化事件会更新当前 resolved theme。
 
