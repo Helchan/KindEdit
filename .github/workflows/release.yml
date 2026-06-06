@@ -6,7 +6,7 @@ on:
       - "v*"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   package:
@@ -54,7 +54,16 @@ jobs:
 
       - name: Build Tauri bundles
         uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           projectPath: .
           args: --verbose
-          uploadWorkflowArtifacts: true
+          tagName: ${{ github.ref_name }}
+          releaseName: KindEdit ${{ github.ref_name }}
+          releaseBody: |
+            KindEdit ${{ github.ref_name }} 自动编译打包产物。
+
+            macOS 和 Windows 安装包由 GitHub Actions 基于当前 tag 自动生成。
+          releaseDraft: false
+          prerelease: false

@@ -6,7 +6,7 @@
 
 KindEdit 是一款基于 Tauri 2、React 18、TypeScript 和 Rust 的跨平台桌面编辑器应用，当前主要面向 Windows 和 macOS。应用提供多标签文本编辑、结构化文档树视图、Markdown 所见即所得编辑、格式化与压缩、主题与字体配置、会话恢复等能力。
 
-当前版本号为 `0.2.23`，版本声明至少存在于以下位置：
+当前版本号为 `0.2.24`，版本声明至少存在于以下位置：
 
 - `package.json`
 - `package-lock.json`
@@ -544,7 +544,7 @@ macOS 当前预期产物：
 
 GitHub Actions 自动编译打包通过 `.github/workflows/release.yml` 实施。该 workflow 的触发条件仅为 `push.tags: ["v*"]`，不得配置为普通 `commit` 或普通分支 `push` 触发。平时只执行代码提交和分支推送时，不应触发 GitHub Actions 自动编译打包。
 
-`.github/workflows/release.yml` 使用 `macos-latest` 和 `windows-latest` 两个平台矩阵，通过 `tauri-apps/tauri-action@v0` 执行 Tauri 打包，并将构建产物上传为 GitHub Actions workflow artifacts。当前 workflow 不自动创建 GitHub Release，不自动发布 release notes，也不修改本地 `build_package.command`。
+`.github/workflows/release.yml` 使用 `macos-latest` 和 `windows-latest` 两个平台矩阵，通过 `tauri-apps/tauri-action@v0` 执行 Tauri 打包，并将构建产物上传到当前 tag 对应的 GitHub Release。当前 workflow 自动创建非草稿、非预发布的 GitHub Release，不修改本地 `build_package.command`。
 
 GitHub Actions 自动打包的版本号使用触发 tag 对应代码中的项目版本号。触发自动打包时，默认从 `package.json` 的 `version` 读取版本，生成 `v{version}` 形式的 tag，并通过 `git push` 推送该 tag。推送 tag 后由 GitHub Actions 在 macOS 和 Windows runner 上分别生成对应平台产物。workflow 会校验 `GITHUB_REF_NAME` 去掉 `v` 前缀后的版本号必须等于 `package.json` 的 `version`，否则停止打包。
 
