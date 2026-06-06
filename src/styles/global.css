@@ -461,6 +461,27 @@ body {
   background: var(--accent-hover);
 }
 
+/* Confirm Save Dialog */
+.confirm-save-dialog {
+  width: min(420px, calc(100vw - 48px));
+}
+
+.confirm-save-body {
+  padding: 18px 16px;
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.confirm-save-body p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.confirm-save-footer .settings-btn {
+  min-width: 64px;
+}
+
 /* About Dialog */
 .about-dialog {
   width: min(360px, calc(100vw - 48px));

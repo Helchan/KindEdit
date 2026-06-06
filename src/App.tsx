@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { getVersion } from '@tauri-apps/api/app';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { open, save, ask } from '@tauri-apps/plugin-dialog';
+import { open, save } from '@tauri-apps/plugin-dialog';
 
 import MonacoEditor from './components/Editor/MonacoEditor';
 import MilkdownEditor, { type MilkdownEditorHandle } from './components/Editor/MilkdownEditor';
@@ -14,6 +14,7 @@ import Resizer from './components/TreeView/Resizer';
 import MarkdownPreview from './components/Markdown/MarkdownPreview';
 import SettingsDialog from './components/Settings/SettingsDialog';
 import AboutDialog from './components/About/AboutDialog';
+import ConfirmSaveDialog, { type ConfirmSaveChoice } from './components/ConfirmSave/ConfirmSaveDialog';
 import ContextMenu, { MenuItem } from './components/ContextMenu/ContextMenu';
 
 import { useTabStore } from './stores/tabStore';
@@ -31,6 +32,15 @@ import { TabState } from './stores/tabStore';
 import './styles/variables.css';
 import './styles/global.css';
 
+interface ConfirmSaveState {
+  subject: string;
+  allowNoAll: boolean;
+}
+
+function getTabSaveSubject(tab: TabState): string {
+  return tab.filePath || tab.title || 'Untitled';
+}
+
 function App() {
   const { resolved: theme } = useTheme();
   const { config, loadConfig, updateConfig, saveConfig } = useConfigStore();
@@ -45,23 +55,6 @@ function App() {
   const restoreTabs = useTabStore(s => s.restoreTabs);
 
   const editorStore = useEditorStore();
-
-  // 带确认的关闭 tab
-  const handleCloseTab = useCallback(async (id: string) => {
-    const tab = useTabStore.getState().tabs.find(t => t.id === id);
-    if (tab?.dirty) {
-      try {
-        const confirmed = await ask(
-          `「${tab.title}」有未保存的修改，确定要关闭吗？`,
-          { title: '确认关闭', kind: 'warning' }
-        );
-        if (!confirmed) return;
-      } catch {
-        // dialog 失败时允许关闭
-      }
-    }
-    closeTab(id);
-  }, [closeTab]);
 
   const handleAbout = useCallback(async () => {
     const version = await getVersion();
@@ -81,6 +74,8 @@ function App() {
   const parseTimerRef = useRef<number | null>(null);
   const cursorSyncTimerRef = useRef<number | null>(null);
   const milkdownEditorRef = useRef<MilkdownEditorHandle | null>(null);
+  const confirmSaveResolverRef = useRef<((choice: ConfirmSaveChoice) => void) | null>(null);
+  const [confirmSaveState, setConfirmSaveState] = useState<ConfirmSaveState | null>(null);
 
   // 右键菜单状态
   const [contextMenuVisible, setContextMenuVisible] = useState(false);
@@ -234,50 +229,6 @@ function App() {
     saveSessionDebounced();
   }, [tabs, activeTabId, sessionRestored, saveSessionDebounced]);
 
-  // 窗口关闭前：保存会话 + 未保存提示
-  useEffect(() => {
-    let destroying = false;
-    const forceDestroy = () => {
-      if (destroying) return;
-      destroying = true;
-      getCurrentWindow().destroy().catch(() => {});
-    };
-  
-    const unlisten = getCurrentWindow().onCloseRequested(async (event) => {
-      event.preventDefault();
-  
-      try {
-        const dirtyTabs = useTabStore.getState().tabs.filter(t => t.dirty);
-  
-        if (dirtyTabs.length > 0) {
-          let confirmed = true;
-          try {
-            confirmed = await ask(
-              '有未保存的修改，确定要关闭吗？',
-              { title: '确认关闭', kind: 'warning' }
-            );
-          } catch {
-            confirmed = true;
-          }
-          if (!confirmed) return; // 用户取消，保持窗口打开
-        }
-  
-        // 尝试保存，最多等 1.5 秒
-        try {
-          await Promise.race([
-            saveSessionNow(),
-            new Promise(resolve => setTimeout(resolve, 1500))
-          ]);
-        } catch {}
-      } catch {}
-  
-      // 无论如何都销毁窗口
-      forceDestroy();
-    });
-  
-    return () => { unlisten.then(fn => fn()); };
-  }, [saveSessionNow]);
-
   // 打开文件
   const handleOpenFile = useCallback(async () => {
     try {
@@ -347,6 +298,160 @@ function App() {
       setStatusIsError(true);
     }
   }, [getActiveTab, editorStore, updateTab, saveSessionNow]);
+
+  const saveTabBeforeClose = useCallback(async (tab: TabState): Promise<boolean> => {
+    try {
+      let filePath = tab.filePath;
+      if (!filePath) {
+        const result = await save({
+          filters: [{ name: 'All Files', extensions: ['*'] }],
+        });
+        if (!result) return false;
+        filePath = result;
+      }
+
+      const activeId = useTabStore.getState().activeTabId;
+      const content = activeId === tab.id ? (editorStore.getValue() || tab.content || '') : (tab.content || '');
+      await invoke('save_file', { path: filePath, content });
+      updateTab(tab.id, {
+        filePath,
+        content,
+        dirty: false,
+        title: filePath!.split('/').pop() || filePath!.split('\\').pop() || 'Untitled',
+      });
+      setStatusMessage('File saved');
+      setStatusIsError(false);
+      await saveSessionNow();
+      return true;
+    } catch (err) {
+      console.error('[saveTabBeforeClose]', err);
+      setStatusMessage(String(err));
+      setStatusIsError(true);
+      return false;
+    }
+  }, [editorStore, updateTab, saveSessionNow]);
+
+  const discardTabChanges = useCallback(async (tab: TabState) => {
+    if (!tab.filePath) {
+      updateTab(tab.id, { content: '', dirty: false });
+      return;
+    }
+
+    try {
+      const result = await invoke<OpenFileResult>('open_file', { path: tab.filePath });
+      updateTab(tab.id, {
+        content: result.content,
+        docType: result.doc_type,
+        isLarge: result.is_large,
+        dirty: false,
+        title: tab.filePath.split('/').pop() || tab.filePath.split('\\').pop() || 'Untitled',
+      });
+
+      if (useTabStore.getState().activeTabId === tab.id) {
+        setTreeNodes(result.tree || []);
+      }
+    } catch {
+      updateTab(tab.id, { dirty: false });
+    }
+  }, [updateTab]);
+
+  const requestSaveConfirmation = useCallback((tab: TabState, allowNoAll: boolean) => {
+    if (confirmSaveResolverRef.current) {
+      confirmSaveResolverRef.current('cancel');
+    }
+
+    return new Promise<ConfirmSaveChoice>((resolve) => {
+      confirmSaveResolverRef.current = resolve;
+      setConfirmSaveState({
+        subject: getTabSaveSubject(tab),
+        allowNoAll,
+      });
+    });
+  }, []);
+
+  const handleConfirmSaveChoice = useCallback((choice: ConfirmSaveChoice) => {
+    const resolve = confirmSaveResolverRef.current;
+    confirmSaveResolverRef.current = null;
+    setConfirmSaveState(null);
+    resolve?.(choice);
+  }, []);
+
+  // 带确认保存的关闭 tab
+  const handleCloseTab = useCallback(async (id: string) => {
+    const tab = useTabStore.getState().tabs.find(t => t.id === id);
+    if (!tab) return;
+
+    if (tab.dirty) {
+      const choice = await requestSaveConfirmation(tab, false);
+      if (choice === 'cancel') return;
+      if (choice === 'yes') {
+        const saved = await saveTabBeforeClose(tab);
+        if (!saved) return;
+      }
+    }
+
+    closeTab(id);
+  }, [closeTab, requestSaveConfirmation, saveTabBeforeClose]);
+
+  // 窗口关闭前：保存会话 + 未保存提示
+  useEffect(() => {
+    let destroying = false;
+    const forceDestroy = () => {
+      if (destroying) return;
+      destroying = true;
+      getCurrentWindow().destroy().catch(() => {});
+    };
+
+    const unlisten = getCurrentWindow().onCloseRequested(async (event) => {
+      event.preventDefault();
+
+      try {
+        const dirtyTabs = useTabStore.getState().tabs.filter(t => t.dirty);
+
+        if (dirtyTabs.length > 0) {
+          const allowNoAll = dirtyTabs.length > 1;
+          let discardRemaining = false;
+
+          for (const dirtyTab of dirtyTabs) {
+            if (discardRemaining) {
+              await discardTabChanges(dirtyTab);
+              continue;
+            }
+
+            const currentTab = useTabStore.getState().tabs.find(t => t.id === dirtyTab.id);
+            if (!currentTab?.dirty) continue;
+
+            const choice = await requestSaveConfirmation(currentTab, allowNoAll);
+            if (choice === 'cancel') return;
+            if (choice === 'yes') {
+              const saved = await saveTabBeforeClose(currentTab);
+              if (!saved) return;
+              continue;
+            }
+
+            if (choice === 'noAll') {
+              discardRemaining = true;
+            }
+
+            await discardTabChanges(currentTab);
+          }
+        }
+
+        // 尝试保存，最多等 1.5 秒
+        try {
+          await Promise.race([
+            saveSessionNow(),
+            new Promise(resolve => setTimeout(resolve, 1500))
+          ]);
+        } catch {}
+      } catch {}
+
+      // 无论如何都销毁窗口
+      forceDestroy();
+    });
+
+    return () => { unlisten.then(fn => fn()); };
+  }, [discardTabChanges, requestSaveConfirmation, saveSessionNow, saveTabBeforeClose]);
 
   // 编辑器内容变更 — 防抖解析
   const handleEditorChange = useCallback((value: string) => {
@@ -795,6 +900,12 @@ function App() {
         open={aboutOpen}
         version={aboutVersion}
         onClose={() => setAboutOpen(false)}
+      />
+      <ConfirmSaveDialog
+        open={!!confirmSaveState}
+        subject={confirmSaveState?.subject || ''}
+        allowNoAll={!!confirmSaveState?.allowNoAll}
+        onChoice={handleConfirmSaveChoice}
       />
       <ContextMenu
         visible={contextMenuVisible}
