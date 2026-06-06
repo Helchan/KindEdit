@@ -1695,7 +1695,7 @@ dependencies = [
 
 [[package]]
 name = "kindedit"
-version = "0.2.24"
+version = "0.2.30"
 dependencies = [
  "dirs 5.0.1",
  "notify",

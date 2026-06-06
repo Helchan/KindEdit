@@ -66,6 +66,66 @@ function findPathForOffsetInTree(nodes: TreeNode[], offset: number): string | nu
   return bestPath;
 }
 
+function buildUtf8ByteOffsetMap(text: string, byteOffsets: number[]): Map<number, number> {
+  const targets = [...new Set(byteOffsets)].sort((a, b) => a - b);
+  const result = new Map<number, number>();
+  let bytes = 0;
+  let targetIndex = 0;
+  let index = 0;
+
+  while (index < text.length && targetIndex < targets.length) {
+    while (targetIndex < targets.length && targets[targetIndex] <= bytes) {
+      result.set(targets[targetIndex], index);
+      targetIndex += 1;
+    }
+
+    const codePoint = text.codePointAt(index) ?? 0;
+    const byteLength = codePoint <= 0x7f ? 1 : codePoint <= 0x7ff ? 2 : codePoint <= 0xffff ? 3 : 4;
+
+    while (targetIndex < targets.length && targets[targetIndex] < bytes + byteLength) {
+      result.set(targets[targetIndex], index);
+      targetIndex += 1;
+    }
+
+    bytes += byteLength;
+    index += codePoint > 0xffff ? 2 : 1;
+  }
+
+  while (targetIndex < targets.length) {
+    result.set(targets[targetIndex], text.length);
+    targetIndex += 1;
+  }
+
+  return result;
+}
+
+function normalizeTreeOffsets(content: string, nodes: TreeNode[] | null | undefined): TreeNode[] {
+  if (!nodes?.length) return [];
+
+  const offsets: number[] = [];
+  function collectOffsets(node: TreeNode) {
+    offsets.push(node.startOffset, node.endOffset);
+    for (const child of node.children) {
+      collectOffsets(child);
+    }
+  }
+  for (const node of nodes) {
+    collectOffsets(node);
+  }
+  const offsetMap = buildUtf8ByteOffsetMap(content, offsets);
+
+  function normalize(node: TreeNode): TreeNode {
+    return {
+      ...node,
+      startOffset: offsetMap.get(node.startOffset) ?? content.length,
+      endOffset: offsetMap.get(node.endOffset) ?? content.length,
+      children: node.children.map(normalize),
+    };
+  }
+
+  return nodes.map(normalize);
+}
+
 function App() {
   const { resolved: theme } = useTheme();
   const { config, loadConfig, updateConfig, saveConfig } = useConfigStore();
@@ -282,11 +342,7 @@ function App() {
         userSetType: true,
       });
       setActiveTab(tabId);
-      if (result.tree) {
-        setTreeNodes(result.tree);
-      } else {
-        setTreeNodes([]);
-      }
+      setTreeNodes(normalizeTreeOffsets(result.content, result.tree));
       setStatusMessage('');
       setStatusIsError(false);
     } catch (err) {
@@ -509,7 +565,7 @@ function App() {
                   content: value,
                   docType: detectedType,
                 });
-                setTreeNodes(tree || []);
+                setTreeNodes(normalizeTreeOffsets(value, tree));
               } catch {
                 setTreeNodes([]);
               }
@@ -543,7 +599,7 @@ function App() {
               content: value,
               docType: docType,
             });
-            setTreeNodes(tree || []);
+            setTreeNodes(normalizeTreeOffsets(value, tree));
           }
         } else {
           const msg = parseResult.error_message || 'Parse error';
@@ -673,7 +729,7 @@ function App() {
           content: tab.content,
           docType: newDocType,
         });
-        setTreeNodes(tree || []);
+        setTreeNodes(normalizeTreeOffsets(tab.content, tree));
       } catch {
         setTreeNodes([]);
       }
@@ -793,7 +849,7 @@ function App() {
       invoke<TreeNode[] | null>('build_tree', {
         content: tab.content,
         docType: tab.docType,
-      }).then(tree => setTreeNodes(tree || [])).catch(() => setTreeNodes([]));
+      }).then(tree => setTreeNodes(normalizeTreeOffsets(tab.content || '', tree))).catch(() => setTreeNodes([]));
     } else {
       setTreeNodes([]);
     }
@@ -820,6 +876,7 @@ function App() {
             <div style={{ width: `${splitRatio * 100}%`, overflow: 'auto', borderRight: '1px solid var(--border)' }}>
               <TreeView
                 nodes={treeNodes}
+                sourceContent={activeTab.content || ''}
                 onNodeClick={handleTreeNodeClick}
                 highlightedPath={highlightedPath}
                 highlightedSignal={highlightedSignal}

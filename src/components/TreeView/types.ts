@@ -16,6 +16,7 @@ export interface TreeNode {
 
 export interface TreeViewProps {
   nodes: TreeNode[];
+  sourceContent?: string;
   onNodeClick?: (node: TreeNode) => void;
   onCopyNodeKey?: (node: TreeNode) => void;
   onCopyNodeValue?: (node: TreeNode) => void;
@@ -31,6 +32,7 @@ export interface TreeNodeComponentProps {
   onToggle: (node: TreeNode) => void;
   onSelect: (node: TreeNode) => void;
   onContextMenu: (e: React.MouseEvent, node: TreeNode) => void;
+  onDoubleClick: (node: TreeNode) => void;
   isHighlighted: boolean;
   fontSize: number;
 }

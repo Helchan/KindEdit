@@ -1,9 +1,10 @@
-import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useMemo, useEffect, useLayoutEffect } from 'react';
 import type { TreeNode, TreeViewProps } from './types';
 import TreeNodeComponent from './TreeNode';
 import './TreeView.css';
 
 const NODE_HEIGHT = 24;
+const MENU_VIEWPORT_PADDING = 8;
 
 /** 扁平化展开的树节点（用于虚拟滚动） */
 interface FlatNode {
@@ -32,15 +33,14 @@ interface ContextMenuState {
 
 export default function TreeView({
   nodes,
+  sourceContent = '',
   onNodeClick,
-  onCopyNodeKey,
-  onCopyNodeValue,
-  onCopyNodePath,
   highlightedPath,
   highlightedSignal = 0,
   fontSize = 13,
 }: TreeViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
   const [contextMenu, setContextMenu] = useState<ContextMenuState>({
@@ -49,6 +49,7 @@ export default function TreeView({
     y: 0,
     node: null,
   });
+  const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
 
   // 当节点重新加载时，默认展开根节点
   useEffect(() => {
@@ -76,6 +77,20 @@ export default function TreeView({
   }, [nodes, expandedPaths]);
 
   const flatNodes = useMemo(() => flattenNodes(nodesWithExpand), [nodesWithExpand]);
+
+  const expandablePaths = useMemo(() => {
+    const paths: string[] = [];
+    function collect(items: TreeNode[]) {
+      for (const node of items) {
+        if (node.children.length > 0) {
+          paths.push(node.path);
+          collect(node.children);
+        }
+      }
+    }
+    collect(nodes);
+    return paths;
+  }, [nodes]);
 
   // 当 highlightedPath 改变时，自动展开路径上所有父节点
   useEffect(() => {
@@ -149,6 +164,7 @@ export default function TreeView({
   );
 
   const handleContextMenu = useCallback((e: React.MouseEvent, node: TreeNode) => {
+    setMenuPosition({ x: e.clientX, y: e.clientY });
     setContextMenu({
       visible: true,
       x: e.clientX,
@@ -157,9 +173,67 @@ export default function TreeView({
     });
   }, []);
 
+  const handleContainerContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    if (menuRef.current?.contains(e.target as Node)) return;
+
+    setMenuPosition({ x: e.clientX, y: e.clientY });
+    setContextMenu({
+      visible: true,
+      x: e.clientX,
+      y: e.clientY,
+      node: null,
+    });
+  }, []);
+
   const closeContextMenu = useCallback(() => {
     setContextMenu((prev) => ({ ...prev, visible: false }));
   }, []);
+
+  useLayoutEffect(() => {
+    if (!contextMenu.visible) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (menuRef.current?.contains(event.target as Node)) return;
+      closeContextMenu();
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        closeContextMenu();
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown, true);
+    document.addEventListener('keydown', handleKeyDown, true);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown, true);
+      document.removeEventListener('keydown', handleKeyDown, true);
+    };
+  }, [contextMenu.visible, closeContextMenu]);
+
+  useEffect(() => {
+    if (!contextMenu.visible) return;
+
+    const updateMenuPosition = () => {
+      const menu = menuRef.current;
+      if (!menu) return;
+
+      const rect = menu.getBoundingClientRect();
+      const maxX = window.innerWidth - rect.width - MENU_VIEWPORT_PADDING;
+      const maxY = window.innerHeight - rect.height - MENU_VIEWPORT_PADDING;
+      setMenuPosition({
+        x: Math.max(MENU_VIEWPORT_PADDING, Math.min(contextMenu.x, Math.max(MENU_VIEWPORT_PADDING, maxX))),
+        y: Math.max(MENU_VIEWPORT_PADDING, Math.min(contextMenu.y, Math.max(MENU_VIEWPORT_PADDING, maxY))),
+      });
+    };
+
+    updateMenuPosition();
+    window.addEventListener('resize', updateMenuPosition);
+    return () => {
+      window.removeEventListener('resize', updateMenuPosition);
+    };
+  }, [contextMenu.visible, contextMenu.x, contextMenu.y, contextMenu.node]);
 
   const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
     setScrollTop(e.currentTarget.scrollTop);
@@ -176,17 +250,97 @@ export default function TreeView({
   const visibleNodes = flatNodes.slice(startIndex, endIndex);
   const offsetY = startIndex * NODE_HEIGHT;
 
-  // 关闭菜单（点击任何地方）
-  const handleContainerClick = useCallback(() => {
-    if (contextMenu.visible) closeContextMenu();
-  }, [contextMenu.visible, closeContextMenu]);
+  const expandAll = useCallback(() => {
+    setExpandedPaths(new Set(expandablePaths));
+  }, [expandablePaths]);
+
+  const collapseAll = useCallback(() => {
+    setExpandedPaths(new Set());
+  }, []);
+
+  const collectSubtreeExpandablePaths = useCallback((node: TreeNode): string[] => {
+    const paths: string[] = [];
+    function collect(item: TreeNode) {
+      if (item.children.length > 0) {
+        paths.push(item.path);
+        for (const child of item.children) {
+          collect(child);
+        }
+      }
+    }
+    collect(node);
+    return paths;
+  }, []);
+
+  const expandNodeSubtree = useCallback((node: TreeNode) => {
+    const paths = collectSubtreeExpandablePaths(node);
+    setExpandedPaths((prev) => {
+      const next = new Set(prev);
+      for (const path of paths) {
+        next.add(path);
+      }
+      return next;
+    });
+  }, [collectSubtreeExpandablePaths]);
+
+  const collapseNodeSubtree = useCallback((node: TreeNode) => {
+    const paths = collectSubtreeExpandablePaths(node);
+    setExpandedPaths((prev) => {
+      const next = new Set(prev);
+      for (const path of paths) {
+        next.delete(path);
+      }
+      return next;
+    });
+  }, [collectSubtreeExpandablePaths]);
+
+  const getRawNodeValue = useCallback((node: TreeNode): string => {
+    if (
+      sourceContent &&
+      node.startOffset >= 0 &&
+      node.endOffset > node.startOffset &&
+      node.endOffset <= sourceContent.length
+    ) {
+      return sourceContent.slice(node.startOffset, node.endOffset);
+    }
+    if (node.value == null) return '';
+    if (node.nodeType === 'String') return JSON.stringify(node.value);
+    return node.value;
+  }, [sourceContent]);
+
+  const getNodeCopyText = useCallback((node: TreeNode): string => {
+    const value = getRawNodeValue(node);
+    if (node.path === '$' || node.key === 'Root') return value;
+    const key = node.key.startsWith('[') ? node.key : JSON.stringify(node.key);
+    return value ? `${key}: ${value}` : key;
+  }, [getRawNodeValue]);
+
+  const copyText = useCallback((text: string) => {
+    navigator.clipboard.writeText(text).catch(() => {
+      // Clipboard can be denied by the host; menu state should still close.
+    });
+  }, []);
+
+  const targetExpandablePaths = contextMenu.node
+    ? collectSubtreeExpandablePaths(contextMenu.node)
+    : [];
+  const canExpandAll = expandablePaths.some((path) => !expandedPaths.has(path));
+  const canCollapseAll = expandablePaths.some((path) => expandedPaths.has(path));
+  const canExpandTarget = targetExpandablePaths.some((path) => !expandedPaths.has(path));
+  const canCollapseTarget = targetExpandablePaths.some((path) => expandedPaths.has(path));
+
+  const runMenuAction = (disabled: boolean, action: () => void) => {
+    if (disabled) return;
+    action();
+    closeContextMenu();
+  };
 
   return (
     <div
       className="tree-view-container"
       ref={containerRef}
       onScroll={handleScroll}
-      onClick={handleContainerClick}
+      onContextMenu={handleContainerContextMenu}
       style={{ overflow: 'auto', height: '100%', background: 'var(--color-bg-secondary)' }}
     >
       <div style={{ height: totalHeight, position: 'relative' }}>
@@ -199,6 +353,7 @@ export default function TreeView({
               onToggle={handleToggle}
               onSelect={handleSelect}
               onContextMenu={handleContextMenu}
+              onDoubleClick={handleToggle}
               isHighlighted={highlightedPath === node.path}
               fontSize={fontSize}
             />
@@ -207,43 +362,65 @@ export default function TreeView({
       </div>
 
       {/* 右键菜单 */}
-      {contextMenu.visible && contextMenu.node && (
+      {contextMenu.visible && (
         <div
+          ref={menuRef}
           className="tree-context-menu"
           style={{
             position: 'fixed',
-            left: contextMenu.x,
-            top: contextMenu.y,
+            left: menuPosition.x,
+            top: menuPosition.y,
             zIndex: 1000,
           }}
         >
           <div
-            className="tree-context-menu-item"
-            onClick={() => {
-              onCopyNodeKey?.(contextMenu.node!);
-              closeContextMenu();
-            }}
+            className={`tree-context-menu-item${canExpandAll ? '' : ' disabled'}`}
+            onClick={() => runMenuAction(!canExpandAll, expandAll)}
           >
-            复制 Key
+            展开所有
           </div>
           <div
-            className="tree-context-menu-item"
-            onClick={() => {
-              onCopyNodeValue?.(contextMenu.node!);
-              closeContextMenu();
-            }}
+            className={`tree-context-menu-item${canCollapseAll ? '' : ' disabled'}`}
+            onClick={() => runMenuAction(!canCollapseAll, collapseAll)}
           >
-            复制 Value
+            折叠所有
           </div>
-          <div
-            className="tree-context-menu-item"
-            onClick={() => {
-              onCopyNodePath?.(contextMenu.node!);
-              closeContextMenu();
-            }}
-          >
-            复制 Path
-          </div>
+          {contextMenu.node && (
+            <>
+              <div className="tree-context-menu-separator" />
+              <div
+                className={`tree-context-menu-item${canExpandTarget ? '' : ' disabled'}`}
+                onClick={() => runMenuAction(!canExpandTarget, () => expandNodeSubtree(contextMenu.node!))}
+              >
+                展开此项
+              </div>
+              <div
+                className={`tree-context-menu-item${canCollapseTarget ? '' : ' disabled'}`}
+                onClick={() => runMenuAction(!canCollapseTarget, () => collapseNodeSubtree(contextMenu.node!))}
+              >
+                折叠此项
+              </div>
+              <div className="tree-context-menu-separator" />
+              <div
+                className="tree-context-menu-item"
+                onClick={() => runMenuAction(false, () => copyText(getNodeCopyText(contextMenu.node!)))}
+              >
+                复制
+              </div>
+              <div
+                className="tree-context-menu-item"
+                onClick={() => runMenuAction(false, () => copyText(getRawNodeValue(contextMenu.node!)))}
+              >
+                复制值
+              </div>
+              <div
+                className="tree-context-menu-item"
+                onClick={() => runMenuAction(false, () => copyText(contextMenu.node!.path))}
+              >
+                复制路径
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>

@@ -58,6 +58,7 @@ export default function TreeNodeComponent({
   onToggle,
   onSelect,
   onContextMenu,
+  onDoubleClick,
   isHighlighted,
   fontSize,
 }: TreeNodeComponentProps) {
@@ -80,6 +81,19 @@ export default function TreeNodeComponent({
     onContextMenu(e, node);
   };
 
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (e.detail > 1) {
+      e.preventDefault();
+    }
+
+    const target = e.target as HTMLElement;
+    const isArrowClick = target.closest('.tree-node-arrow') !== null;
+    if (e.button === 0 && e.detail > 1 && e.detail % 2 === 0 && hasChildren && !isArrowClick) {
+      e.stopPropagation();
+      onDoubleClick(node);
+    }
+  };
+
   const childrenHint = getChildrenHint(node);
 
   // 截断 value 显示
@@ -100,6 +114,7 @@ export default function TreeNodeComponent({
         fontFamily: 'var(--font-mono)',
         userSelect: 'none',
       }}
+      onMouseDown={handleMouseDown}
       onClick={handleClick}
       onContextMenu={handleContextMenu}
     >
