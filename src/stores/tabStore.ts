@@ -34,17 +34,44 @@ function generateTabId(): string {
   return `tab-${Date.now()}-${tabIdCounter}`;
 }
 
-function createDefaultTab(overrides?: Partial<TabState>): TabState {
+const UNTITLED_TITLE = 'Untitled';
+const UNTITLED_TITLE_PATTERN = /^Untitled(?: ([1-9]\d*))?$/;
+
+function getUntitledTitleNumber(title: string): number | null {
+  const match = title.match(UNTITLED_TITLE_PATTERN);
+  if (!match) return null;
+  return match[1] ? Number(match[1]) : 1;
+}
+
+function generateUntitledTitle(existingTabs: TabState[]): string {
+  const usedNumbers = new Set<number>();
+  existingTabs.forEach((tab) => {
+    const number = getUntitledTitleNumber(tab.title);
+    if (number !== null) {
+      usedNumbers.add(number);
+    }
+  });
+
+  let nextNumber = 1;
+  while (usedNumbers.has(nextNumber)) {
+    nextNumber += 1;
+  }
+
+  return nextNumber === 1 ? UNTITLED_TITLE : `${UNTITLED_TITLE} ${nextNumber}`;
+}
+
+function createDefaultTab(overrides: Partial<TabState> = {}, existingTabs: TabState[] = []): TabState {
+  const { title, ...restOverrides } = overrides;
   return {
     id: generateTabId(),
-    title: 'Untitled',
+    title: title ?? generateUntitledTitle(existingTabs),
     filePath: null,
     docType: 'text',
     dirty: false,
     content: '',
     isLarge: false,
     userSetType: false,
-    ...overrides,
+    ...restOverrides,
   };
 }
 
@@ -55,12 +82,16 @@ export const useTabStore = create<TabStore>((set, get) => ({
   activeTabId: initialTab.id,
 
   addTab: (overrides?: Partial<TabState>) => {
-    const newTab = createDefaultTab(overrides);
-    set((state) => ({
-      tabs: [...state.tabs, newTab],
-      activeTabId: newTab.id,
-    }));
-    return newTab.id;
+    let newTabId = '';
+    set((state) => {
+      const newTab = createDefaultTab(overrides, state.tabs);
+      newTabId = newTab.id;
+      return {
+        tabs: [...state.tabs, newTab],
+        activeTabId: newTab.id,
+      };
+    });
+    return newTabId;
   },
 
   closeTab: (id: string) => {
