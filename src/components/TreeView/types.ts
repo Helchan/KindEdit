@@ -24,11 +24,15 @@ export interface TreeViewProps {
   highlightedPath?: string;
   highlightedSignal?: number;
   fontSize?: number;
+  onFontSizeChange?: (fontSize: number) => void;
 }
 
 export interface TreeNodeComponentProps {
   node: TreeNode;
   depth: number;
+  ancestorLast: boolean[];
+  isLast: boolean;
+  rowHeight: number;
   onToggle: (node: TreeNode) => void;
   onSelect: (node: TreeNode) => void;
   onContextMenu: (e: React.MouseEvent, node: TreeNode) => void;

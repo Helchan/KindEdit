@@ -20,7 +20,7 @@ import ContextMenu, { MenuItem } from './components/ContextMenu/ContextMenu';
 import { useTabStore } from './stores/tabStore';
 import { useEditorStore } from './stores/editorStore';
 import { useThemeStore } from './stores/themeStore';
-import { useConfigStore } from './stores/configStore';
+import { type AppConfig, useConfigStore } from './stores/configStore';
 import { useTheme } from './hooks/useTheme';
 import { useKeyboard } from './hooks/useKeyboard';
 import { docTypeToMonacoLanguage } from './components/Editor/monacoConfig';
@@ -35,6 +35,14 @@ import './styles/global.css';
 interface ConfirmSaveState {
   subject: string;
   allowNoAll: boolean;
+}
+
+const MIN_FONT_SIZE = 8;
+const MAX_FONT_SIZE = 28;
+const FONT_STATUS_PREFIXES = ['编辑器字体大小：', '树视图字体大小：'];
+
+function clampFontSize(fontSize: number): number {
+  return Math.max(MIN_FONT_SIZE, Math.min(MAX_FONT_SIZE, Math.round(fontSize)));
 }
 
 function getTabSaveSubject(tab: TabState): string {
@@ -128,7 +136,7 @@ function normalizeTreeOffsets(content: string, nodes: TreeNode[] | null | undefi
 
 function App() {
   const { resolved: theme } = useTheme();
-  const { config, loadConfig, updateConfig, saveConfig } = useConfigStore();
+  const { config, loadConfig, updateConfig } = useConfigStore();
   const tabs = useTabStore(s => s.tabs);
   const activeTabId = useTabStore(s => s.activeTabId);
   const addTab = useTabStore(s => s.addTab);
@@ -160,6 +168,10 @@ function App() {
   const [highlightedSignal, setHighlightedSignal] = useState(0);
   const parseTimerRef = useRef<number | null>(null);
   const cursorSyncTimerRef = useRef<number | null>(null);
+  const saveConfigTimerRef = useRef<number | null>(null);
+  const statusClearTimerRef = useRef<number | null>(null);
+  const statusMessageRef = useRef(statusMessage);
+  const configRef = useRef(config);
   const milkdownEditorRef = useRef<MilkdownEditorHandle | null>(null);
   const confirmSaveResolverRef = useRef<((choice: ConfirmSaveChoice) => void) | null>(null);
   const [confirmSaveState, setConfirmSaveState] = useState<ConfirmSaveState | null>(null);
@@ -168,6 +180,88 @@ function App() {
   const [contextMenuVisible, setContextMenuVisible] = useState(false);
   const [contextMenuX, setContextMenuX] = useState(0);
   const [contextMenuY, setContextMenuY] = useState(0);
+
+  useEffect(() => {
+    configRef.current = config;
+  }, [config]);
+
+  useEffect(() => {
+    statusMessageRef.current = statusMessage;
+  }, [statusMessage]);
+
+  useEffect(() => {
+    if (statusClearTimerRef.current !== null) {
+      window.clearTimeout(statusClearTimerRef.current);
+      statusClearTimerRef.current = null;
+    }
+
+    if (!FONT_STATUS_PREFIXES.some((prefix) => statusMessage.startsWith(prefix))) {
+      return;
+    }
+
+    statusClearTimerRef.current = window.setTimeout(() => {
+      statusClearTimerRef.current = null;
+      if (statusMessageRef.current === statusMessage) {
+        statusMessageRef.current = '';
+        setStatusMessage('');
+      }
+    }, 2000);
+  }, [statusMessage]);
+
+  useEffect(() => {
+    return () => {
+      if (saveConfigTimerRef.current !== null) {
+        window.clearTimeout(saveConfigTimerRef.current);
+        saveConfigTimerRef.current = null;
+        useConfigStore.getState().saveConfig();
+      }
+      if (statusClearTimerRef.current !== null) {
+        window.clearTimeout(statusClearTimerRef.current);
+      }
+    };
+  }, []);
+
+  const scheduleConfigSave = useCallback(() => {
+    if (saveConfigTimerRef.current !== null) {
+      window.clearTimeout(saveConfigTimerRef.current);
+    }
+
+    saveConfigTimerRef.current = window.setTimeout(() => {
+      saveConfigTimerRef.current = null;
+      useConfigStore.getState().saveConfig();
+    }, 150);
+  }, []);
+
+  const applyConfigChange = useCallback((partial: Partial<AppConfig>) => {
+    const previousConfig = configRef.current;
+    const nextConfig = { ...previousConfig, ...partial };
+    configRef.current = nextConfig;
+    updateConfig(partial);
+
+    if (partial.theme !== undefined && partial.theme !== previousConfig.theme) {
+      useThemeStore.getState().setSetting(partial.theme);
+    }
+
+    scheduleConfigSave();
+  }, [scheduleConfigSave, updateConfig]);
+
+  const showTemporaryStatusMessage = useCallback((message: string) => {
+    statusMessageRef.current = message;
+    setStatusIsError(false);
+    setStatusMessage(message);
+  }, []);
+
+  const handleTextFontSizeChange = useCallback((nextFontSize: number) => {
+    const fontSize = clampFontSize(nextFontSize);
+    applyConfigChange({ textFontSize: fontSize });
+    showTemporaryStatusMessage(`编辑器字体大小：${fontSize}`);
+  }, [applyConfigChange, showTemporaryStatusMessage]);
+
+  const handleTreeFontSizeChange = useCallback((nextFontSize: number) => {
+    const fontSize = clampFontSize(nextFontSize);
+    applyConfigChange({ treeFontSize: fontSize });
+    showTemporaryStatusMessage(`树视图字体大小：${fontSize}`);
+  }, [applyConfigChange, showTemporaryStatusMessage]);
 
   const handleUndo = useCallback(() => {
     const tab = getActiveTab();
@@ -745,9 +839,8 @@ function App() {
   // 切换同步
   const handleToggleSync = useCallback(() => {
     const newSync = !config.syncDisplay;
-    updateConfig({ syncDisplay: newSync });
-    saveConfig();
-  }, [config.syncDisplay, updateConfig, saveConfig]);
+    applyConfigChange({ syncDisplay: newSync });
+  }, [applyConfigChange, config.syncDisplay]);
 
   // 复制
   const handleCopy = useCallback(() => {
@@ -885,6 +978,7 @@ function App() {
                 highlightedPath={highlightedPath}
                 highlightedSignal={highlightedSignal}
                 fontSize={config.treeFontSize || 13}
+                onFontSizeChange={handleTreeFontSizeChange}
               />
             </div>
             <Resizer onResize={handleResize} />
@@ -899,6 +993,7 @@ function App() {
               value={activeTab.content || ''}
               onChange={handleEditorChange}
               fontSize={config.textFontSize || 14}
+              onFontSizeChange={handleTextFontSizeChange}
             />
           </div>
         )}
@@ -914,6 +1009,7 @@ function App() {
               onCursorOffsetChange={handleCursorOffsetChange}
               onContextMenu={handleEditorContextMenu}
               fontSize={config.textFontSize || 14}
+              onFontSizeChange={handleTextFontSizeChange}
               theme={theme === 'dark' ? 'kindedit-dark' : 'kindedit-light'}
               readOnly={false}
             />
@@ -957,13 +1053,7 @@ function App() {
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
         config={config}
-        onConfigChange={(partial) => {
-          updateConfig(partial);
-          if (partial.theme !== undefined && partial.theme !== config.theme) {
-            useThemeStore.getState().setSetting(partial.theme);
-          }
-          saveConfig();
-        }}
+        onConfigChange={applyConfigChange}
       />
       <AboutDialog
         open={aboutOpen}

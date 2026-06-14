@@ -33,6 +33,7 @@ interface MilkdownEditorProps {
   value: string;
   onChange: (value: string) => void;
   fontSize?: number;
+  onFontSizeChange?: (fontSize: number) => void;
   tabId: string;
 }
 
@@ -155,6 +156,7 @@ const MilkdownEditorInner = forwardRef<MilkdownEditorHandle, MilkdownEditorProps
   value,
   onChange,
   fontSize = 14,
+  onFontSizeChange,
 }, ref) => {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const editorViewRef = useRef<EditorView | null>(null);
@@ -339,6 +341,15 @@ const MilkdownEditorInner = forwardRef<MilkdownEditorHandle, MilkdownEditorProps
     return () => wrapper.removeEventListener('keydown', handleKeyDown, true);
   }, [closeFind, findOpen, openFind]);
 
+  const handleWheel = useCallback((event: React.WheelEvent<HTMLDivElement>) => {
+    if (!event.ctrlKey || !onFontSizeChange) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    const delta = event.deltaY < 0 ? 1 : -1;
+    onFontSizeChange(fontSize + delta);
+  }, [fontSize, onFontSizeChange]);
+
   // Custom Typora-style keyboard shortcuts
   const typoraShortcuts = $shortcut((ctx) => {
     const commands = ctx.get(commandsCtx);
@@ -441,6 +452,7 @@ const MilkdownEditorInner = forwardRef<MilkdownEditorHandle, MilkdownEditorProps
     <div
       ref={wrapperRef}
       className="milkdown-editor-wrapper"
+      onWheel={handleWheel}
       style={{ fontSize: `${fontSize}px` }}
     >
       {findOpen && (

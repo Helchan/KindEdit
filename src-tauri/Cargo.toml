@@ -1,6 +1,6 @@
 [package]
 name = "kindedit"
-version = "0.3.34"
+version = "0.4.37"
 edition = "2021"
 
 [lib]

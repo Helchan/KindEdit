@@ -16,6 +16,7 @@ interface MonacoEditorProps {
   onContextMenu?: (position: { x: number; y: number }) => void;
   readOnly?: boolean;
   fontSize?: number;
+  onFontSizeChange?: (fontSize: number) => void;
   theme?: 'kindedit-light' | 'kindedit-dark';
 }
 
@@ -29,6 +30,7 @@ export default function MonacoEditor({
   onContextMenu,
   readOnly = false,
   fontSize,
+  onFontSizeChange,
   theme = 'kindedit-light',
 }: MonacoEditorProps) {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
@@ -38,6 +40,7 @@ export default function MonacoEditor({
   const onCursorPositionChangeRef = useRef(onCursorPositionChange);
   const onCursorOffsetChangeRef = useRef(onCursorOffsetChange);
   const onContextMenuRef = useRef(onContextMenu);
+  const onFontSizeChangeRef = useRef(onFontSizeChange);
   const { handleBeforeMount } = useMonaco();
   const { setEditorInstance, setCursorPosition, setCurrentLanguage, isLargeFile } =
     useEditorStore();
@@ -114,6 +117,21 @@ export default function MonacoEditor({
 
       const domNode = editorInstance.getDomNode();
       if (domNode) {
+        const handleWheel = (e: WheelEvent) => {
+          if (!e.ctrlKey || !onFontSizeChangeRef.current) return;
+
+          e.preventDefault();
+          e.stopPropagation();
+          const currentFontSize = editorInstance.getOption(monaco.editor.EditorOption.fontSize);
+          const delta = e.deltaY < 0 ? 1 : -1;
+          onFontSizeChangeRef.current(currentFontSize + delta);
+        };
+
+        domNode.addEventListener('wheel', handleWheel, { passive: false });
+        editorInstance.onDidDispose(() => {
+          domNode.removeEventListener('wheel', handleWheel);
+        });
+
         domNode.addEventListener('dblclick', (e: MouseEvent) => {
           if (!isAdditiveSelectionModifier(e)) return;
           additiveMouseSelectionRef.current = true;
@@ -188,12 +206,22 @@ export default function MonacoEditor({
     onContextMenuRef.current = onContextMenu;
   }, [onContextMenu]);
 
+  useEffect(() => {
+    onFontSizeChangeRef.current = onFontSizeChange;
+  }, [onFontSizeChange]);
+
   // Monaco 是独立模型系统，这里把外部 tab 内容同步到当前模型。
   useEffect(() => {
     const editorInstance = editorRef.current;
     if (!editorInstance) return;
     syncModelValue(editorInstance, value);
   }, [value, syncModelValue]);
+
+  useEffect(() => {
+    const editorInstance = editorRef.current;
+    if (!editorInstance || !fontSize) return;
+    editorInstance.updateOptions({ fontSize });
+  }, [fontSize]);
 
   // 清理编辑器实例引用
   useEffect(() => {

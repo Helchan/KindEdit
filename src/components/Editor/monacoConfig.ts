@@ -21,7 +21,7 @@ export const defaultEditorOptions: editor.IStandaloneEditorConstructionOptions =
   cursorBlinking: 'smooth',
   cursorSmoothCaretAnimation: 'on',
   smoothScrolling: true,
-  mouseWheelZoom: true,
+  mouseWheelZoom: false,
   columnSelection: true,
   multiCursorModifier: 'ctrlCmd',
   selectionHighlight: true,

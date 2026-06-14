@@ -10,14 +10,17 @@ const MENU_VIEWPORT_PADDING = 8;
 interface FlatNode {
   node: TreeNode;
   depth: number;
+  ancestorLast: boolean[];
+  isLast: boolean;
 }
 
-function flattenNodes(nodes: TreeNode[], depth: number = 0): FlatNode[] {
+function flattenNodes(nodes: TreeNode[], depth: number = 0, ancestorLast: boolean[] = []): FlatNode[] {
   const result: FlatNode[] = [];
-  for (const node of nodes) {
-    result.push({ node, depth });
+  for (const [index, node] of nodes.entries()) {
+    const isLast = index === nodes.length - 1;
+    result.push({ node, depth, ancestorLast, isLast });
     if (node.expanded && node.children.length > 0) {
-      result.push(...flattenNodes(node.children, depth + 1));
+      result.push(...flattenNodes(node.children, depth + 1, [...ancestorLast, isLast]));
     }
   }
   return result;
@@ -38,6 +41,7 @@ export default function TreeView({
   highlightedPath,
   highlightedSignal = 0,
   fontSize = 13,
+  onFontSizeChange,
 }: TreeViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -77,6 +81,7 @@ export default function TreeView({
   }, [nodes, expandedPaths]);
 
   const flatNodes = useMemo(() => flattenNodes(nodesWithExpand), [nodesWithExpand]);
+  const rowHeight = Math.max(NODE_HEIGHT, Math.round(fontSize + 11));
 
   const expandablePaths = useMemo(() => {
     const paths: string[] = [];
@@ -133,16 +138,16 @@ export default function TreeView({
     requestAnimationFrame(() => {
       const idx = flatNodes.findIndex((fn) => fn.node.path === highlightedPath);
       if (idx >= 0 && containerRef.current) {
-        const targetTop = idx * NODE_HEIGHT;
+        const targetTop = idx * rowHeight;
         const container = containerRef.current;
         const visibleTop = container.scrollTop;
         const visibleBottom = visibleTop + container.clientHeight;
-        if (targetTop < visibleTop || targetTop + NODE_HEIGHT > visibleBottom) {
-          container.scrollTop = targetTop - container.clientHeight / 2 + NODE_HEIGHT / 2;
+        if (targetTop < visibleTop || targetTop + rowHeight > visibleBottom) {
+          container.scrollTop = targetTop - container.clientHeight / 2 + rowHeight / 2;
         }
       }
     });
-  }, [highlightedPath, highlightedSignal, flatNodes]);
+  }, [highlightedPath, highlightedSignal, flatNodes, rowHeight]);
 
   const handleToggle = useCallback((node: TreeNode) => {
     setExpandedPaths((prev) => {
@@ -239,16 +244,25 @@ export default function TreeView({
     setScrollTop(e.currentTarget.scrollTop);
   }, []);
 
+  const handleWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
+    if (!e.ctrlKey || !onFontSizeChange) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+    const delta = e.deltaY < 0 ? 1 : -1;
+    onFontSizeChange(fontSize + delta);
+  }, [fontSize, onFontSizeChange]);
+
   // 虚拟滚动计算
   const containerHeight = containerRef.current?.clientHeight ?? 600;
-  const totalHeight = flatNodes.length * NODE_HEIGHT;
-  const startIndex = Math.max(0, Math.floor(scrollTop / NODE_HEIGHT) - 2);
+  const totalHeight = flatNodes.length * rowHeight;
+  const startIndex = Math.max(0, Math.floor(scrollTop / rowHeight) - 2);
   const endIndex = Math.min(
     flatNodes.length,
-    Math.ceil((scrollTop + containerHeight) / NODE_HEIGHT) + 2
+    Math.ceil((scrollTop + containerHeight) / rowHeight) + 2
   );
   const visibleNodes = flatNodes.slice(startIndex, endIndex);
-  const offsetY = startIndex * NODE_HEIGHT;
+  const offsetY = startIndex * rowHeight;
 
   const expandAll = useCallback(() => {
     setExpandedPaths(new Set(expandablePaths));
@@ -340,16 +354,20 @@ export default function TreeView({
       className="tree-view-container"
       ref={containerRef}
       onScroll={handleScroll}
+      onWheel={handleWheel}
       onContextMenu={handleContainerContextMenu}
       style={{ overflow: 'auto', height: '100%', background: 'var(--color-bg-secondary)' }}
     >
       <div style={{ height: totalHeight, position: 'relative' }}>
         <div style={{ transform: `translateY(${offsetY}px)` }}>
-          {visibleNodes.map(({ node, depth }) => (
+          {visibleNodes.map(({ node, depth, ancestorLast, isLast }) => (
             <TreeNodeComponent
               key={node.path}
               node={node}
               depth={depth}
+              ancestorLast={ancestorLast}
+              isLast={isLast}
+              rowHeight={rowHeight}
               onToggle={handleToggle}
               onSelect={handleSelect}
               onContextMenu={handleContextMenu}

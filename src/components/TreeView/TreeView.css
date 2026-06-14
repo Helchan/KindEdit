@@ -14,6 +14,65 @@
   -webkit-user-select: none;
 }
 
+.tree-node-connectors {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.tree-node-connector {
+  position: absolute;
+  opacity: 0.9;
+}
+
+.tree-node-connector-vertical,
+.tree-node-connector-current {
+  width: 1px;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    var(--border) 0,
+    var(--border) 2px,
+    transparent 2px,
+    transparent 5px
+  );
+}
+
+.tree-node-connector-elbow {
+  height: 1px;
+  background-image: repeating-linear-gradient(
+    to right,
+    var(--border) 0,
+    var(--border) 2px,
+    transparent 2px,
+    transparent 5px
+  );
+}
+
+.tree-node-toggle-box {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  line-height: 1;
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
+.tree-node-arrow:hover .tree-node-toggle-box {
+  border-color: var(--color-text-secondary);
+  color: var(--color-text-primary);
+}
+
+.tree-node-connector-vertical,
+.tree-node-connector-current {
+  top: 0;
+  bottom: 0;
+}
+
 .tree-node-row * {
   user-select: none;
   -webkit-user-select: none;
