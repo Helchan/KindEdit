@@ -6,7 +6,7 @@
 
 KindEdit 是一款基于 Tauri 2、React 18、TypeScript 和 Rust 的跨平台桌面编辑器应用，当前主要面向 Windows 和 macOS。应用提供多标签文本编辑、结构化文档树视图、Markdown 所见即所得编辑、PDF 阅读与标注、格式化与压缩、主题与字体配置、会话恢复等能力。
 
-当前版本号为 `0.5.42`，版本声明至少存在于以下位置：
+当前版本号为 `0.5.43`，版本声明至少存在于以下位置：
 
 - `package.json`
 - `package-lock.json`
@@ -206,6 +206,7 @@ PDF 标签不使用上述文本保存命令。PDF 保存时，前端从 PDF 视�
 
 - 打开、保存、解析、格式化或压缩失败时，前端将错误字符串显示到状态栏并标记为错误状态。
 - 失败时不得静默丢弃用户编辑内容。
+- 如果 React 根视图或前端异步任务出现未捕获异常，应用必须显示 KindEdit 内部风格的错误面板，保留异常名称、消息和调用栈，避免窗口变成无法诊断的整页空白。
 
 ## 7. 编辑器行为
 
@@ -727,7 +728,10 @@ PDF 性能要求：
 
 - PDF 页面渲染应按需渲染可见页或邻近页，避免打开大型 PDF 时一次性渲染全部页面。
 - 页面懒渲染可以使用 IntersectionObserver，但观察根必须限定在 PDF 页面滚动容器内，且不得把带有大 rootMargin 的预加载命中结果当作当前页。
-- 大型 PDF 滚动时，只允许保留当前页附近和视口预加载范围内的 PDF canvas 与 Fabric 标注实例；离开范围的页面必须释放渲染层，避免越滚越卡和内存持续增长。
+- 大型 PDF 滚动时，只允许保留当前页附近的 PDF canvas 与 Fabric 标注实例；离开范围的页面必须释放渲染层，避免越滚越卡和内存持续增长。
+- 扫描版大型 PDF 页面渲染完成或离开渲染窗口后，必须调用 PDF.js page cleanup 并清空已卸载 canvas 的 backing store，避免连续翻页后 WebView 因图像资源累计而整窗白屏。
+- Fabric.js 标注层销毁是异步过程，滚动导致页面频繁挂载/卸载时必须捕获 `dispose()` rejection，不能让未处理异常破坏整个 React 视图。
+- Fabric.js 会在初始化和销毁时包装、移动或替换传入的 canvas DOM；React 不得直接管理 Fabric 接管的 canvas。PDF 标注层必须使用 React 管理的宿主容器，并在容器内部命令式创建 Fabric canvas，销毁前先将 Fabric wrapper 从宿主容器摘除，避免 React 卸载时触发 `removeChild` / `NotFoundError`。
 - 在 Tauri WebView 中加载扫描版 PDF 时，PDF.js 必须优先使用兼容性更稳定的 legacy runtime/worker 和图像解码路径；OffscreenCanvas、ImageDecoder 以及 PDF.js modern bundle 依赖的较新 Web API 不得作为默认依赖。
 - 页面渲染、缩放和标注重绘必须取消过期任务，避免快速滚动或切换标签时旧渲染结果覆盖新状态。
 - PDF 页面渲染失败不得静默吞掉异常；当前页必须显示渲染失败提示，并通过状态栏给出具体错误信息。

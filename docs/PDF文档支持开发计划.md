@@ -91,7 +91,9 @@
 - [x] 修复 PDF 左侧书签跳转和右侧滚轮滚动后回弹到第 1 页的问题，当前页改由 PDF 滚动容器计算，且 PDF 加载流程不再依赖不稳定状态栏回调。
 - [x] 补齐 PDF.js `wasm`、`cmaps` 和 `standard_fonts` 资源，避免扫描版 PDF 或 JBIG2 图像页在 KindEdit 中因资源缺失显示为空白。
 - [x] 针对 Tauri WebView 调整 PDF.js 图像解码路径，改用 PDF.js legacy runtime/worker，禁用不稳定的 worker OffscreenCanvas / ImageDecoder 默认路径，并在渲染失败时显示错误。
-- [x] PDF 页面只保留当前页附近和视口预加载范围内的 canvas/Fabric 实例，离开范围后释放渲染层，降低大型扫描 PDF 滚动卡顿。
+- [x] PDF 页面只保留当前页附近的 canvas/Fabric 实例，离开范围后释放渲染层，降低大型扫描 PDF 滚动卡顿。
+- [x] 修复大型扫描 PDF 连续滚动翻页后整个 WebView 变成白屏的问题，页面渲染完成或离开渲染窗口后清理 PDF.js page 资源、canvas backing store 和 Fabric 异步销毁异常。
+- [x] 修复 PDF 滚动卸载页面时 Fabric.js 移动 React 管理的标注 canvas 导致 `NotFoundError: removeChild` 并触发整窗白屏的问题，标注层改为 React 宿主容器 + Fabric 内部命令式 canvas。
 - [ ] 在 macOS 实际运行验证普通 PDF 打开、加密 PDF 密码打开、大纲跳转、大纲编辑、标注新增/保存/恢复。
 - [ ] 在交付说明中明确 Windows 未验证项和建议验证方式。
 

@@ -601,3 +601,54 @@ body {
 [data-theme="dark"] .monaco-editor .kindedit-additive-selection-7 {
   background-color: rgba(111, 207, 151, 0.32) !important;
 }
+
+.app-error-boundary {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.app-error-panel {
+  width: min(720px, 100%);
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  padding: 16px;
+  box-shadow: var(--menu-shadow);
+}
+
+.app-error-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--error);
+}
+
+.app-error-description {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.app-error-details {
+  margin: 0;
+  max-height: 360px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  padding: 10px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

@@ -137,12 +137,18 @@
 }
 
 .pdf-page-canvas,
-.pdf-annotation-canvas {
+.pdf-annotation-layer canvas {
   display: block;
 }
 
-.pdf-annotation-canvas {
+.pdf-annotation-layer {
   position: absolute;
+  inset: 0;
+}
+
+.pdf-annotation-layer .pdf-fabric-container,
+.pdf-annotation-layer canvas {
+  position: absolute !important;
   inset: 0;
 }
 

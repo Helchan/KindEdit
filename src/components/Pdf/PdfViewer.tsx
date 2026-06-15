@@ -24,7 +24,7 @@ GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 type PdfTool = 'select' | 'ink' | 'highlight' | 'rect' | 'note';
 const PDFJS_ASSET_BASE_URL = '/pdfjs/';
-const PDF_RENDER_WINDOW_RADIUS = 2;
+const PDF_RENDER_WINDOW_RADIUS = 1;
 
 export interface PdfViewerHandle {
   getState: () => PdfDocumentState;
@@ -78,6 +78,48 @@ function formatErrorMessage(error: unknown): string {
 
 function isRenderingCancelled(error: unknown): boolean {
   return error instanceof Error && error.name === 'RenderingCancelledException';
+}
+
+function resetCanvas(canvas: HTMLCanvasElement | null) {
+  if (!canvas) return;
+  canvas.width = 0;
+  canvas.height = 0;
+  canvas.style.width = '';
+  canvas.style.height = '';
+}
+
+function cleanupPdfPage(page: PDFPageProxy | null) {
+  if (!page) return;
+  try {
+    page.cleanup();
+  } catch {
+    // PDF.js can reject cleanup while a render task is still settling.
+  }
+}
+
+function detachFabricDom(fabric: FabricCanvas, host: HTMLDivElement | null) {
+  if (!host) return;
+  const elements = (fabric as unknown as {
+    elements?: {
+      container?: HTMLElement;
+      lower?: { el?: HTMLCanvasElement };
+    };
+  }).elements;
+  const container = elements?.container;
+  if (container?.parentNode === host) {
+    host.removeChild(container);
+    return;
+  }
+  const lowerCanvas = elements?.lower?.el;
+  if (lowerCanvas?.parentNode === host) {
+    host.removeChild(lowerCanvas);
+  }
+}
+
+function disposeFabricCanvas(fabric: FabricCanvas | null, host: HTMLDivElement | null = null) {
+  if (!fabric) return;
+  detachFabricDom(fabric, host);
+  fabric.dispose().catch(() => {});
 }
 
 async function outlineDestinationToPage(
@@ -422,7 +464,6 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function PdfViewer
               isRenderActive={Math.abs(pageNumber - currentPage) <= PDF_RENDER_WINDOW_RADIUS}
               onAnnotationsChange={handlePageAnnotationsChange}
               onRenderError={handlePageRenderError}
-              pagesContainerRef={pagesContainerRef}
               registerPageRef={registerPageRef}
             />
           ))}
@@ -442,7 +483,6 @@ interface PdfPageViewProps {
   isRenderActive: boolean;
   onAnnotationsChange: (pageNumber: number, annotations: PdfAnnotation[]) => void;
   onRenderError: (pageNumber: number, error: unknown) => void;
-  pagesContainerRef: React.RefObject<HTMLDivElement | null>;
   registerPageRef: (pageNumber: number, element: HTMLDivElement | null) => void;
 }
 
@@ -456,24 +496,31 @@ function PdfPageView({
   isRenderActive,
   onAnnotationsChange,
   onRenderError,
-  pagesContainerRef,
   registerPageRef,
 }: PdfPageViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const pdfCanvasRef = useRef<HTMLCanvasElement>(null);
-  const annotationCanvasRef = useRef<HTMLCanvasElement>(null);
+  const annotationLayerRef = useRef<HTMLDivElement>(null);
+  const annotationCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const fabricRef = useRef<FabricCanvas | null>(null);
   const pageRef = useRef<PDFPageProxy | null>(null);
+  const renderRunRef = useRef(0);
   const suppressFabricEventsRef = useRef(false);
   const drawStartRef = useRef<{ x: number; y: number; object: Rect | null } | null>(null);
   const annotationsRef = useRef(annotations);
-  const [isNearViewport, setIsNearViewport] = useState(pageNumber <= 2);
   const [renderError, setRenderError] = useState<string | null>(null);
   const [pageSize, setPageSize] = useState(() => ({
     width: Math.round(612 * scale),
     height: Math.round(792 * scale),
   }));
-  const shouldRender = isRenderActive || isNearViewport;
+  const shouldRender = isRenderActive;
+
+  const releasePageGraphics = useCallback(() => {
+    cleanupPdfPage(pageRef.current);
+    pageRef.current = null;
+    resetCanvas(pdfCanvasRef.current);
+    resetCanvas(annotationCanvasRef.current);
+  }, []);
 
   useEffect(() => {
     annotationsRef.current = annotations;
@@ -490,23 +537,28 @@ function PdfPageView({
   useEffect(() => {
     const element = containerRef.current;
     registerPageRef(pageNumber, element);
-    if (!element) return;
-    const observer = new IntersectionObserver((entries) => {
-      setIsNearViewport(entries.some((entry) => entry.isIntersecting));
-    }, { root: pagesContainerRef.current, rootMargin: '700px 0px', threshold: 0.01 });
-    observer.observe(element);
     return () => {
-      observer.disconnect();
       registerPageRef(pageNumber, null);
     };
-  }, [pageNumber, pagesContainerRef, registerPageRef]);
+  }, [pageNumber, registerPageRef]);
 
   useEffect(() => {
     let cancelled = false;
     let renderTask: ReturnType<PDFPageProxy['render']> | null = null;
+    const renderRun = renderRunRef.current + 1;
+    renderRunRef.current = renderRun;
+
+    const releaseCurrentPageGraphics = () => {
+      if (renderRunRef.current === renderRun) {
+        releasePageGraphics();
+      }
+    };
 
     async function renderPage() {
-      if (!shouldRender) return;
+      if (!shouldRender) {
+        releaseCurrentPageGraphics();
+        return;
+      }
       const page = await pdf.getPage(pageNumber);
       if (cancelled) return;
       pageRef.current = page;
@@ -516,22 +568,17 @@ function PdfPageView({
         height: viewport.height,
       });
       const pdfCanvas = pdfCanvasRef.current;
-      const annotationCanvas = annotationCanvasRef.current;
-      if (!pdfCanvas || !annotationCanvas) return;
+      if (!pdfCanvas) return;
 
       pdfCanvas.width = viewport.width;
       pdfCanvas.height = viewport.height;
       pdfCanvas.style.width = `${viewport.width}px`;
       pdfCanvas.style.height = `${viewport.height}px`;
-      annotationCanvas.width = viewport.width;
-      annotationCanvas.height = viewport.height;
-      annotationCanvas.style.width = `${viewport.width}px`;
-      annotationCanvas.style.height = `${viewport.height}px`;
-      fabricRef.current?.setDimensions({ width: viewport.width, height: viewport.height });
 
       setRenderError(null);
       renderTask = page.render({ canvas: pdfCanvas, viewport, background: 'rgb(255,255,255)' });
       await renderTask.promise;
+      cleanupPdfPage(page);
     }
 
     renderPage().catch((error) => {
@@ -539,22 +586,37 @@ function PdfPageView({
       const message = formatErrorMessage(error);
       setRenderError(message);
       onRenderError(pageNumber, error);
+    }).finally(() => {
+      if (cancelled) {
+        releaseCurrentPageGraphics();
+      }
     });
     return () => {
       cancelled = true;
       renderTask?.cancel();
+      if (!renderTask) {
+        releaseCurrentPageGraphics();
+      }
     };
-  }, [onRenderError, pageNumber, pdf, scale, shouldRender]);
+  }, [onRenderError, pageNumber, pdf, releasePageGraphics, scale, shouldRender]);
 
   useEffect(() => {
     if (!shouldRender) return;
-    const canvasElement = annotationCanvasRef.current;
-    if (!canvasElement) return;
+    const annotationLayer = annotationLayerRef.current;
+    if (!annotationLayer) return;
+
+    annotationLayer.replaceChildren();
+    const canvasElement = document.createElement('canvas');
+    canvasElement.className = 'pdf-annotation-canvas';
+    annotationLayer.appendChild(canvasElement);
+    annotationCanvasRef.current = canvasElement;
 
     const fabric = new FabricCanvas(canvasElement, {
       selection: true,
       preserveObjectStacking: true,
+      containerClass: 'pdf-fabric-container',
     });
+    fabric.setDimensions({ width: pageSize.width, height: pageSize.height });
     fabricRef.current = fabric;
 
     const emitChange = () => {
@@ -567,10 +629,13 @@ function PdfPageView({
     fabric.on('path:created', emitChange);
 
     return () => {
-      fabric.dispose();
+      disposeFabricCanvas(fabric, annotationLayer);
       fabricRef.current = null;
+      if (annotationCanvasRef.current === canvasElement) {
+        annotationCanvasRef.current = null;
+      }
     };
-  }, [onAnnotationsChange, pageNumber, scale, shouldRender]);
+  }, [onAnnotationsChange, pageNumber, pageSize.height, pageSize.width, scale, shouldRender]);
 
   useEffect(() => {
     const fabric = fabricRef.current;
@@ -701,7 +766,7 @@ function PdfPageView({
         {shouldRender ? (
           <>
             <canvas ref={pdfCanvasRef} className="pdf-page-canvas" />
-            <canvas ref={annotationCanvasRef} className="pdf-annotation-canvas" />
+            <div ref={annotationLayerRef} className="pdf-annotation-layer" />
             {renderError && (
               <div className="pdf-page-render-error">
                 第 {pageNumber} 页渲染失败
