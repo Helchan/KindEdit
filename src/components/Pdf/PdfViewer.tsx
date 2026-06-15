@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type WheelEvent } from 'react';
 import {
   Canvas as FabricCanvas,
   Path as FabricPath,
@@ -25,6 +25,9 @@ GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 type PdfTool = 'select' | 'ink' | 'highlight' | 'rect' | 'note';
 const PDFJS_ASSET_BASE_URL = '/pdfjs/';
 const PDF_RENDER_WINDOW_RADIUS = 1;
+const PDF_MIN_SCALE = 0.5;
+const PDF_MAX_SCALE = 2.5;
+const PDF_SCALE_STEP = 0.1;
 
 export interface PdfViewerHandle {
   getState: () => PdfDocumentState;
@@ -86,6 +89,10 @@ function resetCanvas(canvas: HTMLCanvasElement | null) {
   canvas.height = 0;
   canvas.style.width = '';
   canvas.style.height = '';
+}
+
+function clampPdfScale(scale: number): number {
+  return Math.min(PDF_MAX_SCALE, Math.max(PDF_MIN_SCALE, Number(scale.toFixed(2))));
 }
 
 function cleanupPdfPage(page: PDFPageProxy | null) {
@@ -407,6 +414,44 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function PdfViewer
     onStatusChangeRef.current?.(`PDF 第 ${pageNumber} 页渲染失败：${formatErrorMessage(error)}`, true);
   }, []);
 
+  const updatePdfScale = useCallback((direction: 1 | -1, anchor?: { x: number; y: number }) => {
+    const scroller = pagesContainerRef.current;
+    const rect = scroller?.getBoundingClientRect();
+    const anchorOffset = scroller && rect && anchor
+      ? {
+          x: anchor.x - rect.left,
+          y: anchor.y - rect.top,
+        }
+      : null;
+
+    setScale((currentScale) => {
+      const nextScale = clampPdfScale(currentScale + direction * PDF_SCALE_STEP);
+      if (nextScale === currentScale) return currentScale;
+
+      if (scroller && anchorOffset) {
+        const contentX = (scroller.scrollLeft + anchorOffset.x) / currentScale;
+        const contentY = (scroller.scrollTop + anchorOffset.y) / currentScale;
+
+        window.requestAnimationFrame(() => {
+          scroller.scrollLeft = Math.max(0, contentX * nextScale - anchorOffset.x);
+          scroller.scrollTop = Math.max(0, contentY * nextScale - anchorOffset.y);
+          scheduleVisiblePageUpdate();
+        });
+      }
+
+      onStatusChangeRef.current?.(`PDF 缩放：${Math.round(nextScale * 100)}%`);
+      return nextScale;
+    });
+  }, [scheduleVisiblePageUpdate]);
+
+  const handlePagesWheel = useCallback((event: WheelEvent<HTMLDivElement>) => {
+    if (!event.ctrlKey) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    updatePdfScale(event.deltaY < 0 ? 1 : -1, { x: event.clientX, y: event.clientY });
+  }, [updatePdfScale]);
+
   return (
     <>
       <div className="pdf-sidebar" style={{ width: `${sidebarRatio * 100}%` }}>
@@ -441,15 +486,16 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function PdfViewer
             ))}
           </div>
           <div className="pdf-tool-group">
-            <button className="pdf-tool-button" title="缩小" onClick={() => setScale((value) => Math.max(0.5, value - 0.1))}>−</button>
+            <button className="pdf-tool-button" title="缩小" onClick={() => updatePdfScale(-1)}>−</button>
             <span className="pdf-scale-label">{Math.round(scale * 100)}%</span>
-            <button className="pdf-tool-button" title="放大" onClick={() => setScale((value) => Math.min(2.5, value + 0.1))}>+</button>
+            <button className="pdf-tool-button" title="放大" onClick={() => updatePdfScale(1)}>+</button>
           </div>
         </div>
         <div
           ref={pagesContainerRef}
           className={`pdf-pages ${theme === 'dark' ? 'dark' : 'light'}`}
           onScroll={scheduleVisiblePageUpdate}
+          onWheel={handlePagesWheel}
         >
           {!pdf && <div className="pdf-loading">Loading PDF...</div>}
           {pdf && pageNumbers.map((pageNumber) => (

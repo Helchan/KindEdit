@@ -7,6 +7,23 @@ dist/
 # Tauri and Rust build output
 src-tauri/target/
 
+# Packaged application artifacts
+*.app/
+*.dmg
+*.msi
+*.exe
+*.deb
+*.rpm
+*.AppImage
+*.sig
+*.zip
+
+# Local app runtime data
+Support/
+
+# Local agent capabilities
+.agents/
+
 # TypeScript and bundler caches
 *.tsbuildinfo
 .vite/
@@ -26,6 +43,8 @@ pnpm-debug.log*
 
 # Editor and OS metadata
 .DS_Store
+Thumbs.db
+Desktop.ini
 *.swp
 *.swo
 .idea/

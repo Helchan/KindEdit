@@ -1849,7 +1849,7 @@ dependencies = [
 
 [[package]]
 name = "kindedit"
-version = "0.5.43"
+version = "0.6.43"
 dependencies = [
  "base64 0.22.1",
  "dirs 5.0.1",
