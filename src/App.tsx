@@ -16,6 +16,8 @@ import SettingsDialog from './components/Settings/SettingsDialog';
 import AboutDialog from './components/About/AboutDialog';
 import ConfirmSaveDialog, { type ConfirmSaveChoice } from './components/ConfirmSave/ConfirmSaveDialog';
 import ContextMenu, { MenuItem } from './components/ContextMenu/ContextMenu';
+import PdfViewer, { type PdfViewerHandle } from './components/Pdf/PdfViewer';
+import PdfPasswordDialog from './components/Pdf/PdfPasswordDialog';
 
 import { useTabStore } from './stores/tabStore';
 import { useEditorStore } from './stores/editorStore';
@@ -26,7 +28,15 @@ import { useKeyboard } from './hooks/useKeyboard';
 import { docTypeToMonacoLanguage } from './components/Editor/monacoConfig';
 
 import { TreeNode } from './components/TreeView/types';
-import { ParseResult, OpenFileResult } from './types/document';
+import { ParseResult, OpenFileResult, type ViewMode } from './types/document';
+import {
+  type PdfDocumentState,
+  type PdfOpenResult,
+  type PdfSaveResult,
+  EMPTY_PDF_STATE,
+  parsePdfState,
+  serializePdfState,
+} from './types/pdf';
 import { TabState } from './stores/tabStore';
 
 import './styles/variables.css';
@@ -37,9 +47,59 @@ interface ConfirmSaveState {
   allowNoAll: boolean;
 }
 
+interface PdfPasswordState {
+  fileName: string;
+  invalid: boolean;
+}
+
+interface OpenedPdfDocument {
+  result: PdfOpenResult;
+  password: string | null;
+}
+
+const PDF_PASSWORD_REQUIRED = 'PDF_PASSWORD_REQUIRED';
+const PDF_PASSWORD_INVALID = 'PDF_PASSWORD_INVALID';
+
 const MIN_FONT_SIZE = 8;
 const MAX_FONT_SIZE = 28;
 const FONT_STATUS_PREFIXES = ['编辑器字体大小：', '树视图字体大小：'];
+const OPEN_FILE_FILTERS = [
+  {
+    name: 'Supported Files',
+    extensions: [
+      'pdf',
+      'json',
+      'jsonc',
+      'xml',
+      'svg',
+      'xhtml',
+      'md',
+      'markdown',
+      'sql',
+      'java',
+      'py',
+      'js',
+      'ts',
+      'jsx',
+      'tsx',
+      'txt',
+      'log',
+      'yaml',
+      'yml',
+      'properties',
+      'env',
+      'ini',
+      'cfg',
+    ],
+  },
+  { name: 'PDF', extensions: ['pdf'] },
+  { name: 'JSON', extensions: ['json', 'jsonc'] },
+  { name: 'XML', extensions: ['xml', 'svg', 'xhtml'] },
+  { name: 'Markdown', extensions: ['md', 'markdown'] },
+  { name: 'SQL', extensions: ['sql'] },
+  { name: 'Code', extensions: ['java', 'py', 'js', 'ts', 'jsx', 'tsx'] },
+  { name: 'Text', extensions: ['txt', 'log', 'yaml', 'yml', 'properties', 'env', 'ini', 'cfg'] },
+];
 
 function clampFontSize(fontSize: number): number {
   return Math.max(MIN_FONT_SIZE, Math.min(MAX_FONT_SIZE, Math.round(fontSize)));
@@ -47,6 +107,23 @@ function clampFontSize(fontSize: number): number {
 
 function getTabSaveSubject(tab: TabState): string {
   return tab.filePath || tab.title || 'Untitled';
+}
+
+function getFileName(path: string): string {
+  return path.split('/').pop() || path.split('\\').pop() || 'Untitled';
+}
+
+function isPdfPath(path: string): boolean {
+  return path.toLowerCase().endsWith('.pdf');
+}
+
+function isPdfPasswordError(error: unknown): boolean {
+  const message = String(error);
+  return message.includes(PDF_PASSWORD_REQUIRED) || message.includes(PDF_PASSWORD_INVALID);
+}
+
+function isPdfInvalidPasswordError(error: unknown): boolean {
+  return String(error).includes(PDF_PASSWORD_INVALID);
 }
 
 function findPathForOffsetInTree(nodes: TreeNode[], offset: number): string | null {
@@ -173,8 +250,11 @@ function App() {
   const statusMessageRef = useRef(statusMessage);
   const configRef = useRef(config);
   const milkdownEditorRef = useRef<MilkdownEditorHandle | null>(null);
+  const pdfViewerRef = useRef<PdfViewerHandle | null>(null);
   const confirmSaveResolverRef = useRef<((choice: ConfirmSaveChoice) => void) | null>(null);
+  const pdfPasswordResolverRef = useRef<((password: string | null) => void) | null>(null);
   const [confirmSaveState, setConfirmSaveState] = useState<ConfirmSaveState | null>(null);
+  const [pdfPasswordState, setPdfPasswordState] = useState<PdfPasswordState | null>(null);
 
   // 右键菜单状态
   const [contextMenuVisible, setContextMenuVisible] = useState(false);
@@ -267,6 +347,8 @@ function App() {
     const tab = getActiveTab();
     if (!tab) return;
 
+    if (getViewMode(tab.docType) === 'Pdf') return;
+
     if (getViewMode(tab.docType) === 'Milkdown') {
       milkdownEditorRef.current?.undo();
       return;
@@ -280,6 +362,8 @@ function App() {
     const tab = getActiveTab();
     if (!tab) return;
 
+    if (getViewMode(tab.docType) === 'Pdf') return;
+
     if (getViewMode(tab.docType) === 'Milkdown') {
       milkdownEditorRef.current?.redo();
       return;
@@ -288,6 +372,65 @@ function App() {
     editorStore.editorInstance?.trigger('toolbar', 'redo', null);
     editorStore.editorInstance?.focus();
   }, [editorStore.editorInstance, getActiveTab]);
+
+  const requestPdfPassword = useCallback((fileName: string, invalid: boolean) => {
+    if (pdfPasswordResolverRef.current) {
+      pdfPasswordResolverRef.current(null);
+    }
+
+    return new Promise<string | null>((resolve) => {
+      pdfPasswordResolverRef.current = resolve;
+      setPdfPasswordState({ fileName, invalid });
+    });
+  }, []);
+
+  const handlePdfPasswordSubmit = useCallback((password: string) => {
+    const resolve = pdfPasswordResolverRef.current;
+    pdfPasswordResolverRef.current = null;
+    setPdfPasswordState(null);
+    resolve?.(password);
+  }, []);
+
+  const handlePdfPasswordCancel = useCallback(() => {
+    const resolve = pdfPasswordResolverRef.current;
+    pdfPasswordResolverRef.current = null;
+    setPdfPasswordState(null);
+    resolve?.(null);
+  }, []);
+
+  const openPdfDocument = useCallback(async (
+    filePath: string,
+    initialPassword: string | null = null,
+    promptForPassword = true
+  ): Promise<OpenedPdfDocument | null> => {
+    let password = initialPassword;
+    let invalid = false;
+
+    while (true) {
+      try {
+        const result = await invoke<PdfOpenResult>('open_pdf_file', {
+          path: filePath,
+          password,
+        });
+        return { result, password };
+      } catch (error) {
+        if (!promptForPassword || !isPdfPasswordError(error)) {
+          throw error;
+        }
+
+        const nextPassword = await requestPdfPassword(
+          getFileName(filePath),
+          invalid || isPdfInvalidPasswordError(error)
+        );
+        if (nextPassword === null) {
+          return null;
+        }
+
+        password = nextPassword;
+        invalid = true;
+      }
+    }
+  }, [requestPdfPassword]);
 
   // 初始化：加载配置 + 恢复会话
   useEffect(() => {
@@ -317,15 +460,41 @@ function App() {
           for (const t of session.tabs) {
             let content = t.content || '';
             let docType = t.documentType || 'text';
+            let pdfDataBase64: string | undefined;
+            let pdfEncrypted = false;
 
             // 如果有 filePath，尝试重新读取文件内容
             if (t.filePath) {
-              try {
-                const result = await invoke<OpenFileResult>('open_file', { path: t.filePath });
-                content = result.content;
-                docType = result.doc_type;
-              } catch {
-                // 文件读取失败，使用保存的 content
+              if (docType === 'pdf' || isPdfPath(t.filePath)) {
+                docType = 'pdf';
+                try {
+                  const result = await invoke<PdfOpenResult>('open_pdf_file', {
+                    path: t.filePath,
+                    password: null,
+                  });
+                  pdfDataBase64 = result.dataBase64;
+                  pdfEncrypted = result.encrypted;
+                  const restoredState = parsePdfState(content);
+                  content = serializePdfState({
+                    outline: restoredState.outline,
+                    annotations: restoredState.annotations.length > 0
+                      ? restoredState.annotations
+                      : result.annotations,
+                  });
+                } catch (error) {
+                  if (isPdfPasswordError(error)) {
+                    pdfEncrypted = true;
+                    content = content || serializePdfState(EMPTY_PDF_STATE);
+                  }
+                }
+              } else {
+                try {
+                  const result = await invoke<OpenFileResult>('open_file', { path: t.filePath });
+                  content = result.content;
+                  docType = result.doc_type;
+                } catch {
+                  // 文件读取失败，使用保存的 content
+                }
               }
             } else if (content.trim().length > 0) {
               try {
@@ -342,16 +511,20 @@ function App() {
             }
 
             const isScratchDraft = !t.filePath;
+            const isPdfTab = docType === 'pdf';
 
             restoredTabs.push({
               id: t.id,
               title: t.title,
               filePath: t.filePath,
               docType,
-              dirty: isScratchDraft ? (t.dirty || content.length > 0) : false,
+              dirty: isPdfTab ? t.dirty : (isScratchDraft ? (t.dirty || content.length > 0) : false),
               content,
               isLarge: false,
               userSetType: !!t.filePath, // 有文件路径的 tab 视为已确定类型
+              pdfDataBase64,
+              pdfEncrypted,
+              pdfPassword: null,
             });
           }
 
@@ -412,27 +585,40 @@ function App() {
     saveSessionDebounced();
   }, [tabs, activeTabId, sessionRestored, saveSessionDebounced]);
 
-  // 打开文件
-  const handleOpenFile = useCallback(async () => {
+  const openFilePath = useCallback(async (filePath: string) => {
     try {
-      const filePath = await open({
-        multiple: false,
-        filters: [
-          { name: 'All Files', extensions: ['*'] },
-          { name: 'JSON', extensions: ['json'] },
-          { name: 'XML', extensions: ['xml', 'svg', 'xhtml'] },
-          { name: 'Markdown', extensions: ['md', 'markdown'] },
-          { name: 'SQL', extensions: ['sql'] },
-          { name: 'Code', extensions: ['java', 'py', 'js', 'ts', 'jsx', 'tsx'] },
-        ],
-      });
-      if (!filePath) return;
+      if (isPdfPath(filePath)) {
+        const opened = await openPdfDocument(filePath);
+        if (!opened) return;
+
+        const fileName = getFileName(filePath);
+        const state: PdfDocumentState = {
+          outline: [],
+          annotations: opened.result.annotations,
+        };
+        const tabId = addTab({
+          title: fileName,
+          filePath,
+          docType: 'pdf',
+          content: serializePdfState(state),
+          isLarge: false,
+          userSetType: true,
+          pdfDataBase64: opened.result.dataBase64,
+          pdfEncrypted: opened.result.encrypted,
+          pdfPassword: opened.password,
+        });
+        setActiveTab(tabId);
+        setTreeNodes([]);
+        setStatusMessage(`PDF：1/${opened.result.pageCount}`);
+        setStatusIsError(false);
+        return;
+      }
 
       const result = await invoke<OpenFileResult>('open_file', { path: filePath });
-      const fileName = filePath.split('/').pop() || filePath.split('\\').pop() || 'Untitled';
+      const fileName = getFileName(filePath);
       const tabId = addTab({
         title: fileName,
-        filePath: filePath as string,
+        filePath,
         docType: result.doc_type,
         content: result.content,
         isLarge: result.is_large,
@@ -443,11 +629,129 @@ function App() {
       setStatusMessage('');
       setStatusIsError(false);
     } catch (err) {
+      console.error('[openFilePath]', err);
+      setStatusMessage(String(err));
+      setStatusIsError(true);
+    }
+  }, [addTab, openPdfDocument, setActiveTab]);
+
+  // 打开文件
+  const handleOpenFile = useCallback(async () => {
+    try {
+      const selected = await open({
+        multiple: false,
+        filters: OPEN_FILE_FILTERS,
+      });
+      if (!selected) return;
+
+      const filePath = Array.isArray(selected) ? selected[0] : selected;
+      if (!filePath) return;
+
+      await openFilePath(filePath);
+    } catch (err) {
       console.error('[handleOpenFile]', err);
       setStatusMessage(String(err));
       setStatusIsError(true);
     }
-  }, [addTab, setActiveTab]);
+  }, [openFilePath]);
+
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    let disposed = false;
+
+    getCurrentWindow().onDragDropEvent((event) => {
+      if (event.payload.type !== 'drop') return;
+
+      const droppedPaths = event.payload.paths;
+      if (!droppedPaths.length) return;
+
+      void (async () => {
+        for (const filePath of droppedPaths) {
+          await openFilePath(filePath);
+        }
+      })();
+    }).then((listener) => {
+      if (disposed) {
+        listener();
+      } else {
+        unlisten = listener;
+      }
+    }).catch((err) => {
+      console.error('[onDragDropEvent]', err);
+    });
+
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [openFilePath]);
+
+  const savePdfTab = useCallback(async (tab: TabState): Promise<boolean> => {
+    if (!tab.filePath) {
+      setStatusMessage('PDF 标签缺少原始文件路径，无法保存');
+      setStatusIsError(true);
+      return false;
+    }
+
+    const activeId = useTabStore.getState().activeTabId;
+    let state = activeId === tab.id && pdfViewerRef.current
+      ? pdfViewerRef.current.getState()
+      : parsePdfState(tab.content);
+    let password = activeId === tab.id && pdfViewerRef.current
+      ? pdfViewerRef.current.getPassword()
+      : tab.pdfPassword ?? null;
+
+    if (!password && tab.pdfPassword) {
+      password = tab.pdfPassword;
+    }
+
+    while (true) {
+      if (tab.pdfEncrypted && !password) {
+        const requestedPassword = await requestPdfPassword(getFileName(tab.filePath), false);
+        if (requestedPassword === null) return false;
+        password = requestedPassword;
+      }
+
+      try {
+        const result = await invoke<PdfSaveResult>('save_pdf_file', {
+          path: tab.filePath,
+          password,
+          outline: state.outline,
+          annotations: state.annotations,
+        });
+        state = {
+          ...state,
+          annotations: result.annotations.length > 0 ? result.annotations : state.annotations,
+        };
+        updateTab(tab.id, {
+          content: serializePdfState(state),
+          dirty: false,
+          title: getFileName(tab.filePath),
+          pdfPassword: password,
+          pdfEncrypted: tab.pdfEncrypted,
+        });
+        setStatusMessage(`PDF saved：${result.pageCount} 页`);
+        setStatusIsError(false);
+        await saveSessionNow();
+        return true;
+      } catch (error) {
+        if (tab.pdfEncrypted && isPdfPasswordError(error)) {
+          const requestedPassword = await requestPdfPassword(
+            getFileName(tab.filePath),
+            isPdfInvalidPasswordError(error)
+          );
+          if (requestedPassword === null) return false;
+          password = requestedPassword;
+          continue;
+        }
+
+        console.error('[savePdfTab]', error);
+        setStatusMessage(String(error));
+        setStatusIsError(true);
+        return false;
+      }
+    }
+  }, [requestPdfPassword, saveSessionNow, updateTab]);
 
   // 保存文件
   const handleSaveFile = useCallback(async () => {
@@ -455,6 +759,11 @@ function App() {
     if (!tab) return;
 
     try {
+      if (tab.docType === 'pdf') {
+        await savePdfTab(tab);
+        return;
+      }
+
       let filePath = tab.filePath;
       if (!filePath) {
         const result = await save({
@@ -476,9 +785,13 @@ function App() {
       setStatusMessage(String(err));
       setStatusIsError(true);
     }
-  }, [getActiveTab, editorStore, updateTab, saveSessionNow]);
+  }, [getActiveTab, editorStore, updateTab, saveSessionNow, savePdfTab]);
 
   const saveTabBeforeClose = useCallback(async (tab: TabState): Promise<boolean> => {
+    if (tab.docType === 'pdf') {
+      return savePdfTab(tab);
+    }
+
     try {
       let filePath = tab.filePath;
       if (!filePath) {
@@ -508,11 +821,45 @@ function App() {
       setStatusIsError(true);
       return false;
     }
-  }, [editorStore, updateTab, saveSessionNow]);
+  }, [editorStore, updateTab, saveSessionNow, savePdfTab]);
 
   const discardTabChanges = useCallback(async (tab: TabState) => {
     if (!tab.filePath) {
       updateTab(tab.id, { content: '', dirty: false });
+      return;
+    }
+
+    if (tab.docType === 'pdf') {
+      try {
+        const result = await invoke<PdfOpenResult>('open_pdf_file', {
+          path: tab.filePath,
+          password: tab.pdfPassword ?? null,
+        });
+        updateTab(tab.id, {
+          content: serializePdfState({
+            outline: [],
+            annotations: result.annotations,
+          }),
+          dirty: false,
+          title: getFileName(tab.filePath),
+          pdfDataBase64: result.dataBase64,
+          pdfEncrypted: result.encrypted,
+          pdfPassword: tab.pdfPassword ?? null,
+        });
+      } catch (error) {
+        if (isPdfPasswordError(error)) {
+          updateTab(tab.id, {
+            content: serializePdfState(EMPTY_PDF_STATE),
+            dirty: false,
+            title: getFileName(tab.filePath),
+            pdfDataBase64: undefined,
+            pdfEncrypted: true,
+            pdfPassword: null,
+          });
+        } else {
+          updateTab(tab.id, { dirty: false });
+        }
+      }
       return;
     }
 
@@ -961,6 +1308,49 @@ function App() {
     });
   }, []);
 
+  const handlePdfStateChange = useCallback((nextState: PdfDocumentState, dirty: boolean) => {
+    const tab = getActiveTab();
+    if (!tab || tab.docType !== 'pdf') return;
+
+    updateTab(tab.id, {
+      content: serializePdfState(nextState),
+      dirty: dirty || tab.dirty,
+    });
+  }, [getActiveTab, updateTab]);
+
+  const handlePdfStatusChange = useCallback((message: string, isError = false) => {
+    setStatusMessage(message);
+    setStatusIsError(isError);
+  }, []);
+
+  const unlockActivePdfTab = useCallback(async () => {
+    const tab = getActiveTab();
+    if (!tab || tab.docType !== 'pdf' || !tab.filePath) return;
+
+    try {
+      const opened = await openPdfDocument(tab.filePath, null, true);
+      if (!opened) return;
+      const restoredState = parsePdfState(tab.content);
+      const nextState: PdfDocumentState = {
+        outline: restoredState.outline,
+        annotations: restoredState.annotations.length > 0
+          ? restoredState.annotations
+          : opened.result.annotations,
+      };
+      updateTab(tab.id, {
+        content: serializePdfState(nextState),
+        pdfDataBase64: opened.result.dataBase64,
+        pdfEncrypted: opened.result.encrypted,
+        pdfPassword: opened.password,
+      });
+      setStatusMessage(`PDF：1/${opened.result.pageCount}`);
+      setStatusIsError(false);
+    } catch (error) {
+      setStatusMessage(String(error));
+      setStatusIsError(true);
+    }
+  }, [getActiveTab, openPdfDocument, updateTab]);
+
   const renderEditorArea = () => {
     if (!sessionRestored || !activeTab) {
       return <div className="startup-placeholder" />;
@@ -997,7 +1387,38 @@ function App() {
             />
           </div>
         )}
-        {viewMode !== 'Milkdown' && (
+        {viewMode === 'Pdf' && (
+          activeTab.pdfDataBase64 ? (
+            <PdfViewer
+              ref={pdfViewerRef}
+              key={activeTab.id}
+              tabId={activeTab.id}
+              dataBase64={activeTab.pdfDataBase64}
+              password={activeTab.pdfPassword}
+              initialState={parsePdfState(activeTab.content)}
+              treeFontSize={config.treeFontSize || 13}
+              sidebarRatio={splitRatio}
+              theme={theme === 'dark' ? 'dark' : 'light'}
+              onStateChange={handlePdfStateChange}
+              onFontSizeChange={handleTreeFontSizeChange}
+              onResizeSidebar={handleResize}
+              onStatusChange={handlePdfStatusChange}
+            />
+          ) : (
+            <div className="pdf-locked-view">
+              <div className="pdf-locked-panel">
+                <div className="pdf-locked-title">PDF 已加密</div>
+                <div className="pdf-locked-file" title={activeTab.filePath || activeTab.title}>
+                  {activeTab.title}
+                </div>
+                <button type="button" className="pdf-unlock-button" onClick={unlockActivePdfTab}>
+                  输入密码
+                </button>
+              </div>
+            </div>
+          )
+        )}
+        {(viewMode === 'Single' || viewMode === 'SplitTree') && (
           <div style={{ flex: 1, overflow: 'hidden' }}>
             <MonacoEditor
               key={activeTab.id}
@@ -1046,8 +1467,8 @@ function App() {
         message={statusMessage}
         isError={statusIsError}
         docType={activeTab?.docType}
-        cursorLine={viewMode !== 'Milkdown' ? editorStore.cursorLine : undefined}
-        cursorColumn={viewMode !== 'Milkdown' ? editorStore.cursorColumn : undefined}
+        cursorLine={viewMode === 'Single' || viewMode === 'SplitTree' ? editorStore.cursorLine : undefined}
+        cursorColumn={viewMode === 'Single' || viewMode === 'SplitTree' ? editorStore.cursorColumn : undefined}
       />
       <SettingsDialog
         open={settingsOpen}
@@ -1066,6 +1487,13 @@ function App() {
         allowNoAll={!!confirmSaveState?.allowNoAll}
         onChoice={handleConfirmSaveChoice}
       />
+      <PdfPasswordDialog
+        open={!!pdfPasswordState}
+        fileName={pdfPasswordState?.fileName || ''}
+        invalid={!!pdfPasswordState?.invalid}
+        onSubmit={handlePdfPasswordSubmit}
+        onCancel={handlePdfPasswordCancel}
+      />
       <ContextMenu
         visible={contextMenuVisible}
         x={contextMenuX}
@@ -1078,7 +1506,7 @@ function App() {
 }
 
 // 辅助函数：根据文档类型获取视图模式
-function getViewMode(docType?: string): 'Single' | 'SplitTree' | 'Milkdown' {
+function getViewMode(docType?: string): ViewMode | 'Milkdown' {
   switch (docType) {
     case 'json':
     case 'xml':
@@ -1086,6 +1514,8 @@ function getViewMode(docType?: string): 'Single' | 'SplitTree' | 'Milkdown' {
       return 'SplitTree';
     case 'markdown':
       return 'Milkdown';
+    case 'pdf':
+      return 'Pdf';
     default:
       return 'Single';
   }

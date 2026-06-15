@@ -9,6 +9,7 @@ pub mod python_doc;
 pub mod javascript_doc;
 pub mod text_doc;
 pub mod log_doc;
+pub mod pdf_doc;
 
 use serde::{Deserialize, Serialize};
 
@@ -128,6 +129,7 @@ impl DocumentRegistry {
             Box::new(python_doc::PythonDocument),
             Box::new(javascript_doc::JavaScriptDocument),
             Box::new(log_doc::LogDocument),
+            Box::new(pdf_doc::PdfDocument),
             Box::new(text_doc::TextDocument), // text must be last (fallback)
         ];
         Self { types }
@@ -201,6 +203,9 @@ mod tests {
 
         let doc = registry.detect_by_path("readme.md").unwrap();
         assert_eq!(doc.type_id(), "markdown");
+
+        let doc = registry.detect_by_path("book.pdf").unwrap();
+        assert_eq!(doc.type_id(), "pdf");
     }
 
     #[test]

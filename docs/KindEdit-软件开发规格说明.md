@@ -4,9 +4,9 @@
 
 ## 1. 项目概述
 
-KindEdit 是一款基于 Tauri 2、React 18、TypeScript 和 Rust 的跨平台桌面编辑器应用，当前主要面向 Windows 和 macOS。应用提供多标签文本编辑、结构化文档树视图、Markdown 所见即所得编辑、格式化与压缩、主题与字体配置、会话恢复等能力。
+KindEdit 是一款基于 Tauri 2、React 18、TypeScript 和 Rust 的跨平台桌面编辑器应用，当前主要面向 Windows 和 macOS。应用提供多标签文本编辑、结构化文档树视图、Markdown 所见即所得编辑、PDF 阅读与标注、格式化与压缩、主题与字体配置、会话恢复等能力。
 
-当前版本号为 `0.4.37`，版本声明至少存在于以下位置：
+当前版本号为 `0.5.42`，版本声明至少存在于以下位置：
 
 - `package.json`
 - `package-lock.json`
@@ -30,6 +30,10 @@ KindEdit 是一款基于 Tauri 2、React 18、TypeScript 和 Rust 的跨平台�
 | Monaco React Adapter | `package.json`, `package-lock.json` | `@monaco-editor/react = ^4.6.0` | `4.7.0` | Monaco 与 React 的适配层。 |
 | Milkdown | `package.json`, `package-lock.json` | `@milkdown/kit = ^7.21.1` | `7.21.1` | Markdown 所见即所得编辑器核心能力。 |
 | Milkdown React Adapter | `package.json`, `package-lock.json` | `@milkdown/react = ^7.21.1` | `7.21.1` | Milkdown 与 React 的适配层。 |
+| PDF.js | `package.json`, `package-lock.json` | `pdfjs-dist = ^6.0.227` | `6.0.227` | PDF 页面加载、密码打开、页面渲染和大纲读取。 |
+| Fabric.js | `package.json`, `package-lock.json` | `fabric = ^7.4.0` | `7.4.0` | PDF 页面标注覆盖层、对象选择、绘制和序列化。 |
+| lopdf | `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock` | `lopdf = "0.41.0"` | `0.41.0` | Rust 侧 PDF 校验、解密、目录和标注写入。 |
+| base64 | `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock` | `base64 = "0.22.1"` | `0.22.1` | Rust 与前端之间传递 PDF 二进制内容的编码依赖。 |
 | Rust edition | `src-tauri/Cargo.toml` | `edition = "2021"` | Rust 2021 | 当前仓库未固定 `rust-toolchain`，不能假设使用高于当前构建环境的 Rust 语言特性。 |
 
 开发和修改代码时，必须优先以 `package.json`、`package-lock.json`、`src-tauri/Cargo.toml`、`src-tauri/Cargo.lock` 中的声明和锁定版本为准。若依赖升级、降级或新增会影响上述基线，必须同步更新本文档、锁文件和对应验证说明。
@@ -42,6 +46,8 @@ KindEdit 是一款基于 Tauri 2、React 18、TypeScript 和 Rust 的跨平台�
 - Zustand
 - Monaco Editor
 - Milkdown
+- PDF.js
+- Fabric.js
 - Tauri JavaScript API
 - Tauri Dialog 插件
 
@@ -54,6 +60,8 @@ KindEdit 是一款基于 Tauri 2、React 18、TypeScript 和 Rust 的跨平台�
 - sqlformat
 - dirs
 - ropey
+- lopdf
+- base64
 
 运行形态：
 
@@ -107,7 +115,7 @@ Rust 后端职责：
 
 - 顶部工具栏：打开文件、保存、回退、重做、设置、关于；打开/保存/回退/重做属于同一组，右侧使用竖线与设置/关于分隔。
 - 标签栏：显示已打开标签、脏状态、文档类型，支持选择、关闭和新建标签。
-- 主编辑区域：根据文档类型显示单编辑器、树视图+编辑器，或 Markdown 编辑器。
+- 主编辑区域：根据文档类型显示单编辑器、树视图+编辑器、Markdown 编辑器，或 PDF 阅读与标注视图。
 - 底部状态栏：显示状态消息、错误信息、文档类型和 Monaco 光标位置。
 - 设置弹窗：配置主题、编辑器字体、树视图字体、同步显示和 SQL 格式化关键字大写开关。
 - 编辑器右键菜单：提供格式化、压缩、类型切换、同步、复制、粘贴、清空等操作。
@@ -165,13 +173,21 @@ Rust 后端职责：
 
 1. 前端调用系统打开文件对话框。
 2. 对话框支持单选。
-3. 文件过滤器包括 All Files、JSON、XML、Markdown、SQL、Code。
-4. 选中文件后调用 Rust `open_file` 命令读取内容。
+3. 文件过滤器包括 Supported Files、PDF、JSON、XML、Markdown、SQL、Code、Text；不得使用 `*` 伪装 All Files，以免 macOS 原生打开面板把 PDF 等文件错误置灰为不可选。
+4. 选中文本类文件后调用 Rust `open_file` 命令读取内容；选中 `.pdf` 文件后调用 Rust `open_pdf_file` 命令读取 PDF 二进制内容。
 5. Rust 检查文件是否存在，不存在时返回 `File not found: {path}`。
 6. Rust 使用 `TextBuffer` 读取文件内容并判断是否为大文件。
 7. Rust 根据路径和内容检测文档类型。
 8. Rust 尝试构建文档树。
 9. 前端创建新标签并激活，标题取文件名。
+
+窗口拖入文件流程：
+
+1. 主窗口监听 Tauri `onDragDropEvent`。
+2. 用户将文件拖入 KindEdit 窗口并释放后，应用按拖入路径顺序逐个打开文件。
+3. 拖入 `.pdf` 文件时复用 PDF 专用打开流程；普通 PDF 直接打开，加密 PDF 继续显示密码输入弹窗。
+4. 拖入文本类文件时复用文本 `open_file` 流程。
+5. 任一文件打开失败时在状态栏显示错误，不影响已经成功打开的其他文件，也不得改变当前未保存编辑内容。
 
 保存文件流程：
 
@@ -183,6 +199,8 @@ Rust 后端职责：
 6. 大内容使用 `TextBuffer` 写入，普通内容使用 `fs::write` 写入。
 7. 保存成功后标签更新为非脏状态，标题更新为文件名，状态栏显示 `File saved`。
 8. 保存成功后立即触发一次会话保存。
+
+PDF 标签不使用上述文本保存命令。PDF 保存时，前端从 PDF 视图或标签缓存读取当前大纲和 KindEdit 标注状态，调用 Rust `save_pdf_file` 命令写回原 PDF 文件；保存成功后清除脏状态并立即保存会话。
 
 文件错误显示：
 
@@ -268,7 +286,7 @@ Markdown 编辑器快捷键：
 
 ## 9. 文档类型支持
 
-文档类型由 Rust `DocumentRegistry` 注册，检测顺序为 JSON、XML、Markdown、YAML、Properties、SQL、Java、Python、JavaScript、Log、Text。路径匹配优先于内容检测；未匹配时回退到 Text。
+文档类型由 Rust `DocumentRegistry` 注册，检测顺序为 JSON、XML、Markdown、YAML、Properties、SQL、Java、Python、JavaScript、Log、PDF、Text。路径匹配优先于内容检测；未匹配时回退到 Text。
 
 当前支持矩阵：
 
@@ -284,12 +302,14 @@ Markdown 编辑器快捷键：
 | Python | `.py`, `.pyw`, `.pyi` | 单编辑器 | 始终有效 | 不支持 | 不支持 | 不支持 |
 | JavaScript | `.js`, `.mjs`, `.cjs`, `.jsx`, `.ts`, `.tsx` | 单编辑器 | 括号检查 | 不支持 | 不支持 | 不支持 |
 | Log | `.log` | 单编辑器 | 始终有效 | 不支持 | 不支持 | 不支持 |
+| PDF | `.pdf` | PDF 阅读与标注视图 | PDF 文件校验 | PDF 大纲视图 | 不支持 | 不支持 |
 | Text | `.txt`, `.text` | 单编辑器 | 始终有效 | 不支持 | 不支持 | 不支持 |
 
 前端当前视图映射：
 
 - `json`、`xml`、`yaml` 显示为树视图 + Monaco 编辑器。
 - `markdown` 显示为 Milkdown 编辑器。
+- `pdf` 显示为 PDF 阅读与标注视图。
 - 其他类型显示为单 Monaco 编辑器。
 
 Monaco 语言映射：
@@ -628,7 +648,100 @@ cargo check --manifest-path src-tauri/Cargo.toml
 
 推送必须使用 SSH 方式。如果当前远程不是 SSH URL，必须先向用户说明并等待确认，不得自行改用 HTTPS 推送。
 
-## 20. 后续维护规则
+## 20. PDF 文档支持设计规格
+
+本节记录 PDF 文档支持的当前产品行为和实施约束。
+
+PDF 支持目标：
+
+- 支持打开普通 `.pdf` 文件。
+- 支持打开已加密 `.pdf` 文件；文件需要密码时，应用必须显示 KindEdit 内部风格的密码输入弹窗，用户取消时不得创建新标签或改变当前标签状态，密码错误时必须允许重新输入。
+- 支持 PDF 页面阅读，包括多页滚动、页码显示、缩放显示和主题适配；页面渲染不得阻塞标签切换、滚动和其他主交互。
+- 支持在左侧视图显示 PDF 目录结构。PDF 目录结构也称为大纲或书签，左侧视图使用与现有树视图一致的紧凑密度、字体配置、展开/折叠行为、右键菜单风格和分栏拖拽行为。
+- 支持编辑 PDF 目录结构，包括编辑书签标题、修改目标页、新增同级书签、新增子书签、删除书签和调整书签顺序。删除包含子书签的节点时，菜单文案显示为 `删除（含子级）`，明确删除范围。
+- 支持标注 PDF 内容。本轮基础标注能力至少包含自由手写/绘制、矩形框、高亮区域和文字备注；后续可扩展下划线、删除线、箭头、图形样式、颜色和透明度。
+- PDF 大纲和标注发生变化后，标签必须标记为脏；保存成功后清除脏状态，保存失败不得丢弃未保存的大纲或标注状态。
+
+默认技术方案：
+
+- 前端 PDF 渲染使用 PDF.js legacy runtime 和 legacy worker。PDF.js 负责加载 PDF 二进制数据、处理密码、读取页数、渲染页面、读取现有大纲和解析页面目标位置；Tauri WebView 默认不得使用依赖较新浏览器 API 的 PDF.js modern bundle。
+- 前端标注交互使用 Fabric.js。Fabric.js 负责页面覆盖层中的对象选择、绘制、移动、编辑和序列化。标注坐标必须以 PDF 页面坐标为归一化源数据，不能只保存当前缩放后的屏幕像素。
+- Rust PDF 结构处理使用 `lopdf`。`lopdf` 负责验证 PDF 文件、处理密码、读取页对象、读取/写入大纲、写入 KindEdit 生成的 PDF 注释对象、保存 PDF 文件。
+- 如需在前端和 Rust 之间传递 PDF 二进制数据，可使用轻量 Base64 编解码依赖；该依赖只承担二进制传输编码职责，不参与业务解析。
+
+备选方案记录：
+
+- `pdfium-render` / PDFium 可以在 Rust 侧统一完成渲染、文本、注释和部分 PDF 编辑能力，但需要为 macOS 和 Windows 打包 Pdfium 原生库或处理静态链接，明显增加本地脚本、GitHub Actions 和安装产物维护复杂度。本轮不作为默认路线。
+- PDF.js 官方 viewer 的内置 UI 和编辑层可以复用较多 PDF 阅读能力，但其界面、状态和工具栏体系与 KindEdit 现有主界面差异较大，整合成本和样式收敛成本高。本轮仅使用 PDF.js 核心 API，不直接嵌入完整官方 viewer UI。
+- 纯 JS PDF 写入库可减少 Rust 侧 PDF 对象操作，但对大纲、加密 PDF、标准注释对象和跨平台文件保存的可控性弱于 Rust 后端路径。本轮不作为默认路线。
+
+架构边界：
+
+- `src-tauri/src/documents/*` 继续承担文档类型注册，新增 `pdf` 类型时必须通过 `DocumentRegistry` 注册 `.pdf` 扩展名，不能把 PDF 当作普通文本读取。
+- `src-tauri/src/commands/*` 应新增 PDF 专用命令，处理 PDF 二进制读取、密码校验、大纲和标注写入。现有 `open_file`、`save_file` 文本路径不得直接用于 PDF 二进制读写。
+- 前端应新增 PDF 专用视图组件，负责 PDF 页面渲染、缩放、页面滚动、标注工具栏和左侧大纲交互。`src/App.tsx` 只负责按 `docType === "pdf"` 进入 PDF 视图、协调标签状态和保存流程，不应承载 PDF 页面渲染细节。
+- PDF 大纲数据应使用独立类型表达，至少包含节点 id、标题、目标页码、目标坐标、子节点和展开状态；不得复用现有 JSON/XML/YAML `TreeNode` 的 offset 语义来表达 PDF 页目标。
+- PDF 标注数据应使用独立类型表达，至少包含标注 id、页码、类型、页面坐标、颜色、线宽、透明度、文本内容和 Fabric 序列化数据。用于保存到 PDF 文件的标准注释数据必须能从该结构稳定生成。
+- PDF 密码只允许作为本次打开/保存流程的内存态信息存在，不得写入 `session.json`、配置文件、日志、问题记录或规格文档示例。
+- PDF.js 的 `cmaps`、`standard_fonts` 和 `wasm` 资源必须随前端产物一起提供，并在开发服务器和打包产物中都能通过 `/pdfjs/` 路径访问。扫描版 PDF 或包含 JBIG2/JPEG2000 图像流的页面不得因为缺少 PDF.js wasm 资源、或因为使用不兼容 Tauri WebView 的 PDF.js modern bundle 而显示为空白页。
+
+PDF 打开流程：
+
+1. 前端打开文件对话框必须包含 PDF 过滤器，并保证 `.pdf` 文件在 macOS 和 Windows 原生打开面板中可选。
+2. 用户选择或拖入 `.pdf` 文件后，前端调用 Rust PDF 打开命令，而不是文本 `open_file`。
+3. Rust 检查文件是否存在，读取二进制内容，并通过 `lopdf` 判断是否为有效 PDF。
+4. 如果 PDF 未加密，Rust 返回用于 PDF.js 加载的二进制数据、页数和 KindEdit 可识别的标注数据；PDF 原有大纲由前端 PDF.js 在加载后读取。
+5. 如果 PDF 已加密且没有密码或密码错误，Rust 返回明确的密码需求错误；前端显示密码弹窗。
+6. 密码输入成功后，前端创建 `pdf` 类型标签并挂载 PDF 视图。
+7. 打开失败时只在状态栏显示错误，不创建 PDF 标签，不改变当前编辑内容。
+
+PDF 大纲行为：
+
+- 左侧大纲点击节点时，右侧 PDF 视图滚动到目标页；如果节点包含页内坐标，则滚动到目标位置附近。
+- 右侧 PDF 视图的当前页状态必须由 PDF 页面滚动容器计算，不得由页面预加载观察器直接驱动；点击书签或鼠标滚动后，页面不得抖动或回弹到第 1 页。
+- PDF 加载 effect 只允许依赖 PDF 数据、密码和稳定内部函数；状态栏更新、当前页更新、标注状态更新等交互回调不得触发 PDF 重新加载。
+- 大纲节点支持展开/折叠；字体大小跟随“树视图字体大小”配置。
+- 大纲右键菜单包含与 PDF 编辑相关的操作：重命名、新增同级、新增子级、设置目标为当前页、上移、下移、复制标题、复制路径、删除；全局区域提供新增书签、展开所有、折叠所有和复制路径。
+- 新增书签默认目标为当前 PDF 视图所在页；如果当前页不可确定，则使用第 1 页。
+- 重命名、新增、删除或重排后，PDF 标签立即变为脏状态。
+- 保存时，Rust 使用当前前端大纲状态重建或更新 PDF 大纲对象；保存失败时前端仍保留未保存的大纲状态。
+
+PDF 标注行为：
+
+- 标注覆盖层必须跟随 PDF 页面缩放、滚动和主题切换稳定对齐。
+- 标注工具至少提供选择、手写、高亮、矩形和文字备注模式；工具按钮必须使用 KindEdit 现有工具栏密度和按钮样式。
+- 用户新增、移动、编辑或删除标注后，PDF 标签立即变为脏状态。
+- 保存时，Rust 将 KindEdit 标注写入 PDF 标准注释对象；再次保存时不得重复写入同一批 KindEdit 标注。
+- 文件中已有的非 KindEdit PDF 注释对象在保存时会保留；KindEdit 本轮优先保证自己新增的标注可编辑、可保存、可再次打开后恢复，不把原有非 KindEdit 注释纳入可编辑对象。
+
+PDF 保存与数据安全：
+
+- PDF 保存走专用保存命令。当前 PDF 标签必须来自已打开的 PDF 文件，保存到原路径；不支持从空白标签新建 PDF 或将无原始路径的 PDF 标签另存为新文件。
+- 加密 PDF 保存时必须使用本次打开时用户输入的密码进行必要的解密/重写处理；应用不得把密码持久化。若保存时缺少密码，必须重新请求密码或中止保存，不能静默失败。
+- 保存失败时必须显示错误，不得清除脏状态。
+- 关闭脏 PDF 标签和关闭窗口时，继续复用现有确认保存弹窗流程。
+- 会话恢复时，有文件路径的 PDF 标签优先重新读取原 PDF 文件；未保存的大纲/标注草稿可通过会话内容恢复，但不得恢复密码。
+- 如果未来实现加密 PDF 保存后无法保留原加密状态，必须在交付前明确说明并等待用户确认，不得静默把加密 PDF 保存为未加密文件。
+
+PDF 性能要求：
+
+- PDF 页面渲染应按需渲染可见页或邻近页，避免打开大型 PDF 时一次性渲染全部页面。
+- 页面懒渲染可以使用 IntersectionObserver，但观察根必须限定在 PDF 页面滚动容器内，且不得把带有大 rootMargin 的预加载命中结果当作当前页。
+- 大型 PDF 滚动时，只允许保留当前页附近和视口预加载范围内的 PDF canvas 与 Fabric 标注实例；离开范围的页面必须释放渲染层，避免越滚越卡和内存持续增长。
+- 在 Tauri WebView 中加载扫描版 PDF 时，PDF.js 必须优先使用兼容性更稳定的 legacy runtime/worker 和图像解码路径；OffscreenCanvas、ImageDecoder 以及 PDF.js modern bundle 依赖的较新 Web API 不得作为默认依赖。
+- 页面渲染、缩放和标注重绘必须取消过期任务，避免快速滚动或切换标签时旧渲染结果覆盖新状态。
+- PDF 页面渲染失败不得静默吞掉异常；当前页必须显示渲染失败提示，并通过状态栏给出具体错误信息。
+- 标注对象变化应局部更新当前页状态，不应高频全量重建所有页面标注。
+- Rust 写入大纲和标注应在保存命令中集中执行，不得在前端每次小编辑时同步写入 PDF 文件。
+
+PDF 跨平台要求：
+
+- macOS 和 Windows 均通过 Tauri/Rust 读取与保存 PDF 文件路径，不依赖浏览器 `file://` 直接访问本地文件。
+- 文件路径必须支持空格、中文、特殊字符和 Windows 反斜杠。
+- 密码弹窗、保存失败提示、确认保存流程和右键菜单均使用 KindEdit 应用内 UI；系统打开/保存文件选择继续使用 Tauri Dialog 插件。
+- 当前环境如只能完成 macOS 验证，交付说明必须明确 Windows 下仍需验证打开普通 PDF、打开加密 PDF、编辑大纲、保存标注、路径字符和打包产物。
+
+## 21. 后续维护规则
 
 本文档必须描述当前真实行为，不得保留已经失效的旧设计、旧限制或旧流程。
 

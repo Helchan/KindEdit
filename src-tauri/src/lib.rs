@@ -29,6 +29,8 @@ pub fn run() {
             commands::document::compact_text,
             commands::document::build_tree,
             commands::document::detect_type,
+            commands::pdf::open_pdf_file,
+            commands::pdf::save_pdf_file,
             commands::config::load_config,
             commands::config::save_config,
             commands::config::get_session,

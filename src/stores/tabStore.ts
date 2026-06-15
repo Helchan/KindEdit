@@ -9,6 +9,9 @@ export interface TabState {
   content: string;
   isLarge: boolean;
   userSetType: boolean;
+  pdfDataBase64?: string;
+  pdfEncrypted?: boolean;
+  pdfPassword?: string | null;
 }
 
 interface TabStore {

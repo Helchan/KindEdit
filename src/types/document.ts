@@ -19,7 +19,7 @@ export interface DocumentMetadata {
   language: string;
 }
 
-export type ViewMode = 'Single' | 'SplitTree' | 'SplitPreview';
+export type ViewMode = 'Single' | 'SplitTree' | 'SplitPreview' | 'Pdf';
 
 export interface ParseResult {
   valid: boolean;

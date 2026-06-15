@@ -1,0 +1,333 @@
+.pdf-sidebar {
+  width: 30%;
+  min-width: 180px;
+  max-width: 520px;
+  overflow: hidden;
+  border-right: 1px solid var(--border);
+  background: var(--bg-secondary);
+}
+
+.pdf-resizer-spacer {
+  width: 0;
+}
+
+.pdf-viewer {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-primary);
+}
+
+.pdf-toolbar {
+  height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  background: var(--toolbar-bg);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.pdf-tool-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.pdf-tool-button {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.pdf-tool-button:hover,
+.pdf-tool-button.active {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.pdf-color-swatch {
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.pdf-color-swatch.active {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.pdf-scale-label {
+  min-width: 42px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.pdf-pages {
+  flex: 1;
+  overflow: auto;
+  padding: 18px 0 28px;
+}
+
+.pdf-pages.light {
+  background: #d8d8d8;
+}
+
+.pdf-pages.dark {
+  background: #171717;
+}
+
+.pdf-loading {
+  padding: 18px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.pdf-page-wrap {
+  width: max-content;
+  margin: 0 auto 18px;
+}
+
+.pdf-page-label {
+  padding: 0 0 6px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.pdf-page-canvas-stack {
+  position: relative;
+  background: #fff;
+  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.28);
+}
+
+.pdf-page-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #777;
+  font-size: 12px;
+  background: #fff;
+}
+
+.pdf-page-render-error {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--error);
+  font-size: 12px;
+  pointer-events: none;
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.pdf-page-canvas,
+.pdf-annotation-canvas {
+  display: block;
+}
+
+.pdf-annotation-canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.pdf-outline {
+  height: 100%;
+  overflow: auto;
+  background: var(--bg-secondary);
+  user-select: none;
+}
+
+.pdf-outline-list {
+  min-height: 100%;
+  padding: 4px 0;
+}
+
+.pdf-outline-empty {
+  padding: 12px;
+  color: var(--text-secondary);
+}
+
+.pdf-outline-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-right: 8px;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-family: var(--font-mono);
+}
+
+.pdf-outline-row:hover {
+  background: var(--menu-hover);
+}
+
+.pdf-outline-toggle {
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  font-size: 10px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.pdf-outline-toggle:disabled {
+  opacity: 0;
+}
+
+.pdf-outline-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
+}
+
+.pdf-outline-page {
+  color: var(--text-secondary);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.pdf-outline-input {
+  flex: 1;
+  min-width: 0;
+  height: 22px;
+  border: 1px solid var(--accent);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font: inherit;
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.pdf-outline-menu {
+  position: fixed;
+  z-index: 1000;
+}
+
+.tree-context-menu-item.danger {
+  color: var(--error);
+}
+
+.pdf-password-dialog {
+  width: 360px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--menu-shadow);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.pdf-password-body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pdf-password-file {
+  color: var(--text-secondary);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pdf-password-input {
+  height: 30px;
+  border: 1px solid var(--border);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border-radius: 4px;
+  padding: 0 8px;
+  outline: none;
+}
+
+.pdf-password-input:focus {
+  border-color: var(--accent);
+}
+
+.pdf-password-error {
+  color: var(--error);
+  font-size: 12px;
+}
+
+.pdf-password-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+}
+
+.pdf-locked-view {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.pdf-locked-panel {
+  width: min(360px, calc(100% - 48px));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pdf-locked-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.pdf-locked-file {
+  color: var(--text-secondary);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pdf-unlock-button {
+  align-self: flex-start;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.pdf-unlock-button:hover {
+  background: var(--menu-hover);
+}

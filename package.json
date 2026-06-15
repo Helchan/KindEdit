@@ -1,7 +1,7 @@
 {
   "name": "kindedit",
   "private": true,
-  "version": "0.4.37",
+  "version": "0.5.42",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -20,7 +20,9 @@
     "@tauri-apps/api": "^2.0.0",
     "@tauri-apps/plugin-dialog": "^2.0.0",
     "@tauri-apps/plugin-fs": "^2.0.0",
+    "fabric": "^7.4.0",
     "monaco-editor": "^0.50.0",
+    "pdfjs-dist": "^6.0.227",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-markdown": "^9.0.1",
